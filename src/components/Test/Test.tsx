@@ -6,11 +6,9 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import React, { Suspense, useEffect, useState } from "react";
-import { useRecoilValue } from "recoil";
+import React, { useEffect, useState } from "react";
 import { createScore } from "../../state/scoreServices";
-import { IWord, wordsSelector } from "../../state/selectors/wordsSelector";
-import { updateWord } from "../../state/wordsServices";
+import englishWords from "../../assets/words/en.json";
 import Timer from "./components/Timer";
 import { isAlphabetCharacter, shuffleArray } from "./utils";
 
@@ -20,15 +18,11 @@ const Test: React.FC<{
 }> = (props) => {
   const { theme, setTheme } = props;
 
-  const wordObjects = useRecoilValue(wordsSelector);
-
   const loggedUser = localStorage.getItem("user");
   const user = loggedUser ? JSON.parse(loggedUser) : "";
   const userId = user._id || "";
 
-  const processedWords = shuffleArray(
-    wordObjects.map((word: IWord) => word.text)
-  ).join(" ");
+  const processedWords = shuffleArray([...englishWords]).join(" ");
 
   const [selectedTime, setSelectedTime] = useState<number>(60);
   const [value, setValue] = useState<string>("");
@@ -116,16 +110,6 @@ const Test: React.FC<{
       // SPACE
       if (value === currentWord) {
         setScore(score + 1);
-      } else {
-        const currentWordData = wordObjects.filter(
-          (word: any) => word.text === currentWord
-        );
-        const wordData = {
-          text: currentWord,
-          mistakes: currentWordData[0].mistakes + 1,
-        };
-        const wordId = currentWordData[0]._id;
-        updateWord(wordId, wordData);
       }
       nextWord();
       setValue("");
@@ -157,7 +141,6 @@ const Test: React.FC<{
   };
 
   return (
-    <Suspense fallback={<div>Loading...</div>}>
       <Stack direction="column" spacing={5}>
         <Stack direction="row" spacing={4}>
           <Select
@@ -224,7 +207,6 @@ const Test: React.FC<{
           <Typography>{"Score: " + score}</Typography>
         </Stack>
       </Stack>
-    </Suspense>
   );
 };
 

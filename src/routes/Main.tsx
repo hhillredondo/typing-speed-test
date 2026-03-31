@@ -1,5 +1,5 @@
 import { createTheme, CssBaseline, Stack, ThemeProvider } from "@mui/material";
-import React, { Suspense, useState } from "react";
+import React, { useState } from "react";
 import AppHeader from "../components/AppHeader";
 import Keyboards from "../components/Keyboards";
 import Login from "../components/Login";
@@ -34,9 +34,7 @@ const Main: React.FC<{ view: string }> = (props) => {
 
         {props.view === "" && (
           <Stack alignItems={"center"} sx={{ mt: 10 }}>
-            <Suspense fallback={<div>Loading...</div>}>
-              <Test theme={theme} setTheme={setTheme}></Test>
-            </Suspense>
+            <Test theme={theme} setTheme={setTheme}></Test>
           </Stack>
         )}
 
