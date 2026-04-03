@@ -1,5 +1,5 @@
-import { Button, Stack, TextField, Typography } from "@mui/material";
-import { useState } from "react";
+import { Button, Stack, TextField } from "@mui/material";
+import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { login } from "../state/userServices";
 
@@ -20,46 +20,43 @@ const Login: React.FC<{}> = () => {
     }));
   };
 
-  const onSubmit = (e: any) => {
-    const userData = {
-      email,
-      password,
-    };
+  const onSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    const userData = { email, password };
     try {
-      const res = login(userData);
-      res.then(() => navigate("/home"));
+      login(userData).then(() => navigate("/home"));
     } catch (error: any) {
       console.log(error);
     }
   };
 
   return (
-    <>
-      <Stack className="heading" textAlign="center" mb={2}>
-        <Typography fontSize={"28px"}>Login</Typography>
-      </Stack>
-
-      <Stack direction="column" spacing={2}>
-        <TextField
-          type="email"
-          name="email"
-          value={email}
-          placeholder="Enter your email"
-          onChange={onChange}
-        />
-        <TextField
-          type="password"
-          name="password"
-          value={password}
-          placeholder="Enter password"
-          onChange={onChange}
-        />
-
-        <Button onClick={(e) => onSubmit(e)} variant="contained">
-          Submit
-        </Button>
-      </Stack>
-    </>
+    <Stack
+      component="form"
+      direction="column"
+      spacing={2}
+      onSubmit={onSubmit}
+    >
+      <TextField
+        type="email"
+        name="email"
+        value={email}
+        label="Email"
+        onChange={onChange}
+        autoComplete="email"
+      />
+      <TextField
+        type="password"
+        name="password"
+        value={password}
+        label="Password"
+        onChange={onChange}
+        autoComplete="current-password"
+      />
+      <Button type="submit" variant="contained">
+        Login
+      </Button>
+    </Stack>
   );
 };
 

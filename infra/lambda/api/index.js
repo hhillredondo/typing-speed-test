@@ -16,7 +16,6 @@ const crypto = require("crypto");
 const TABLE = process.env.TABLE_NAME;
 const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID;
 const CLIENT_ID = process.env.COGNITO_CLIENT_ID;
-const REGION = process.env.AWS_REGION;
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const cognito = new CognitoIdentityProviderClient({});
@@ -152,21 +151,23 @@ async function handleGetMe(event) {
 // ── Score routes ──
 
 async function handleCreateScore(event) {
-  const { user: userId, type, score, theme } = parseBody(event);
+  const body = parseBody(event);
+  const userId = body.user || "anonymous";
+  const score = body.score ?? 0;
+  const userName = body.userName || "Anonymous";
 
   const now = new Date().toISOString();
   const id = crypto.randomUUID();
 
   const item = {
-    pk: userId ? `USER#${userId}` : "USER#anonymous",
+    pk: userId !== "anonymous" ? `USER#${userId}` : "USER#anonymous",
     sk: `SCORE#${now}#${id}`,
     gsi1pk: "SCORE",
     gsi1sk: now,
     scoreId: id,
-    userId: userId || "anonymous",
-    type: type || "qwerty",
-    score: score ?? 0,
-    theme: theme ?? false,
+    userId,
+    userName,
+    score,
     createdAt: now,
   };
 
@@ -174,10 +175,9 @@ async function handleCreateScore(event) {
 
   return response(201, {
     _id: id,
-    user: item.userId,
-    type: item.type,
-    score: item.score,
-    theme: item.theme,
+    user: userId,
+    userName,
+    score,
     createdAt: now,
   });
 }
@@ -195,9 +195,8 @@ async function handleGetScores() {
   const scores = (result.Items || []).map((item) => ({
     _id: item.scoreId,
     user: item.userId,
-    type: item.type,
+    userName: item.userName || "Anonymous",
     score: item.score,
-    theme: item.theme,
     createdAt: item.createdAt,
   }));
 

@@ -1,13 +1,14 @@
-import { Stack } from "@mui/material";
+import { Typography } from "@mui/material";
 import React from "react";
 
-const Timer: React.FC<{ time: number }> = (props) => {
-  const { time } = props;
-
+const Timer: React.FC<{ time: number }> = ({ time }) => {
   return (
-    <>
-      <Stack fontSize={75}>{time}</Stack>
-    </>
+    <Typography
+      sx={{ fontSize: { xs: 48, sm: 60, md: 75 } }}
+      fontWeight="bold"
+    >
+      {time}
+    </Typography>
   );
 };
 

@@ -1,212 +1,405 @@
 import {
+  Box,
   Button,
-  MenuItem,
-  Select,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createScore } from "../../state/scoreServices";
 import englishWords from "../../assets/words/en.json";
 import Timer from "./components/Timer";
-import { isAlphabetCharacter, shuffleArray } from "./utils";
+import { shuffleArray } from "./utils";
 
-const Test: React.FC<{
-  theme: number;
-  setTheme: React.Dispatch<React.SetStateAction<number>>;
-}> = (props) => {
-  const { theme, setTheme } = props;
+const TEST_DURATION = 60;
 
+const cursorKeyframes = `
+@keyframes blink-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}`;
+
+const Test: React.FC<{ onTestRunning?: (running: boolean) => void }> = ({
+  onTestRunning,
+}) => {
   const loggedUser = localStorage.getItem("user");
-  const user = loggedUser ? JSON.parse(loggedUser) : "";
-  const userId = user._id || "";
+  const user = loggedUser ? JSON.parse(loggedUser) : null;
+  const userId = user?._id || "";
+  const userName = user?.name || "";
 
-  const processedWords = shuffleArray([...englishWords]).join(" ");
-
-  const [selectedTime, setSelectedTime] = useState<number>(60);
-  const [value, setValue] = useState<string>("");
-  const [currentWords, setCurrentWords] = useState<string>(processedWords);
-  const [currentDynamicWord, setCurrentDynamicWord] = useState<string>(
-    currentWords.substring(0, currentWords.indexOf(" "))
+  const [words, setWords] = useState<string[]>(() =>
+    shuffleArray([...englishWords])
   );
-  const [currentWord, setCurrentWord] = useState<string>(
-    currentWords.substring(0, currentWords.indexOf(" "))
-  );
-  const [reverseWord, setReverseWord] = useState<string>("");
-  const [score, setScore] = useState<number>(0);
-  const [timer, setTimer] = useState<number>(0);
-  const [testRunning, setTestRunning] = useState<boolean>(false);
-  const [keyboardType, setKeyboardType] = useState<string>("qwerty");
+  const [wordIndex, setWordIndex] = useState(0);
+  const [typed, setTyped] = useState("");
+  const [score, setScore] = useState(0);
+  const [mistakes, setMistakes] = useState(0);
+  const [correctKeys, setCorrectKeys] = useState(0);
+  const [totalKeys, setTotalKeys] = useState(0);
+  const [timer, setTimer] = useState(TEST_DURATION);
+  const [testRunning, setTestRunning] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
 
-  const handleTimeChange = (event: any) => {
-    setSelectedTime(event.target.value);
-  };
-
-  const handleTypeChange = (event: any) => {
-    setKeyboardType(event.target.value);
-  };
-
-  const handleThemeChange = (event: any) => {
-    const themeNumber = event.target.value;
-    setTheme(themeNumber);
-    const themeName = themeNumber === 0 ? "light" : "dark";
-    localStorage.setItem("theme", themeName);
-  };
+  const inputRef = useRef<HTMLInputElement>(null);
+  const finalScoreRef = useRef(0);
+  const finalMistakesRef = useRef(0);
+  const finalAccuracyRef = useRef(100);
+  const scoreRef = useRef(0);
+  const mistakesRef = useRef(0);
+  const correctKeysRef = useRef(0);
+  const totalKeysRef = useRef(0);
 
   useEffect(() => {
-    if (testRunning)
-      timer > 0 ? setTimeout(() => setTimer(timer - 1), 1000) : finishTest();
-  }, [timer]);
+    scoreRef.current = score;
+  }, [score]);
+  useEffect(() => {
+    mistakesRef.current = mistakes;
+  }, [mistakes]);
+  useEffect(() => {
+    correctKeysRef.current = correctKeys;
+  }, [correctKeys]);
+  useEffect(() => {
+    totalKeysRef.current = totalKeys;
+  }, [totalKeys]);
 
-  const stopTest = () => {
+  useEffect(() => {
+    onTestRunning?.(testRunning);
+  }, [testRunning, onTestRunning]);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const finishTest = useCallback(() => {
     setTestRunning(false);
-    document.getElementById("typing-box")?.blur();
-  };
+    finalScoreRef.current = scoreRef.current;
+    finalMistakesRef.current = mistakesRef.current;
+    finalAccuracyRef.current =
+      totalKeysRef.current > 0
+        ? Math.round((correctKeysRef.current / totalKeysRef.current) * 100)
+        : 100;
+
+    if (userId) {
+      createScore({
+        user: userId,
+        score: scoreRef.current,
+        userName,
+      }).catch(console.error);
+    }
+
+    setShowModal(true);
+  }, [userId, userName]);
+
+  useEffect(() => {
+    if (!testRunning) return;
+    if (timer <= 0) {
+      finishTest();
+      return;
+    }
+    const id = setTimeout(() => setTimer((t) => t - 1), 1000);
+    return () => clearTimeout(id);
+  }, [timer, testRunning, finishTest]);
 
   const resetTest = () => {
-    setTimer(0);
+    setWords(shuffleArray([...englishWords]));
+    setWordIndex(0);
+    setTyped("");
     setScore(0);
-    stopTest();
+    setMistakes(0);
+    setCorrectKeys(0);
+    setTotalKeys(0);
+    setTimer(TEST_DURATION);
+    setTestRunning(false);
   };
 
-  const finishTest = () => {
-    stopTest();
-    nextWord();
-    setValue("");
-    const themeData = theme === 0 ? false : true;
-    try {
-      const data = {
-        user: userId,
-        type: keyboardType,
-        score: score,
-        theme: themeData,
-      };
-      createScore(data);
-    } catch (error) {
-      console.log(error);
+  const handleCloseModal = () => {
+    setShowModal(false);
+    resetTest();
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
+
+  const handleQuit = () => {
+    resetTest();
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
+
+  const currentWord = words[wordIndex] || "";
+
+  const trackKeystroke = (key: string, typedSoFar: string) => {
+    const pos = typedSoFar.length;
+    const target = currentWord[pos];
+    setTotalKeys((t) => t + 1);
+    if (target !== undefined && key === target) {
+      setCorrectKeys((c) => c + 1);
     }
   };
 
-  const nextWord = () => {
-    const trimmedWords = currentWords.trim();
-    const nextWords = trimmedWords.slice(currentWords.indexOf(" "));
-    setCurrentWords(nextWords.trim());
-    const trimtrim = nextWords.trim();
-    setCurrentDynamicWord(trimtrim.slice(0, trimtrim.indexOf(" ")));
-    setCurrentWord(trimtrim.slice(0, trimtrim.indexOf(" ")));
-    setReverseWord("");
-  };
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === " " || e.key === "Backspace") {
+      e.preventDefault();
+    }
 
-  const startTest = () => {
-    setScore(0);
-    setTimer(selectedTime);
-    setTestRunning(true);
-  };
+    if (!testRunning) {
+      if (e.key.length === 1 && e.key !== " ") {
+        setTestRunning(true);
+        setTimer(TEST_DURATION);
+        setScore(0);
+        setMistakes(0);
+        setCorrectKeys(0);
+        setTotalKeys(0);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!testRunning) startTest();
-    if (e.keyCode === 32) {
-      // SPACE
-      if (value === currentWord) {
-        setScore(score + 1);
+        const target = currentWord[0];
+        setTotalKeys(1);
+        setCorrectKeys(target !== undefined && e.key === target ? 1 : 0);
+        setTyped(e.key);
+        return;
       }
-      nextWord();
-      setValue("");
-    } else if (e.keyCode === 8) {
-      // BACKSPACE
-      if (reverseWord.length > 0) {
-        const currentChar = reverseWord.length - 1;
-        const currentWordArray = currentWord.split("");
-        const letterToAdd = currentWordArray[currentChar];
-        if (value.length <= currentWord.length) {
-          setCurrentWords(letterToAdd + currentWords);
-          setCurrentDynamicWord(letterToAdd + currentDynamicWord);
-          setReverseWord(reverseWord.slice(0, -1));
-          setValue(value.slice(0, -1));
-        }
-        setValue(value.slice(0, -1));
-      } else if (reverseWord.length === 0) {
-        setValue("");
+      return;
+    }
+
+    if (e.key === " ") {
+      if (typed.length === 0) return;
+      if (typed === currentWord) {
+        setScore((s) => s + 1);
+      } else {
+        setMistakes((m) => m + 1);
       }
-    } else if (isAlphabetCharacter(e)) {
-      setValue(value + e.key);
-      if (currentDynamicWord.length > 0) {
-        setCurrentDynamicWord(currentDynamicWord.slice(1));
-        const letterGone = currentDynamicWord.slice(0, 1);
-        setReverseWord(reverseWord + letterGone);
-        setCurrentWords(currentWords.slice(1));
-      }
+      setWordIndex((i) => i + 1);
+      setTyped("");
+    } else if (e.key === "Backspace") {
+      setTyped((t) => t.slice(0, -1));
+    } else if (e.key.length === 1) {
+      trackKeystroke(e.key, typed);
+      setTyped((t) => t + e.key);
     }
   };
+
+  const focusInput = () => inputRef.current?.focus();
+
+  const accuracy =
+    totalKeys > 0 ? Math.round((correctKeys / totalKeys) * 100) : 100;
+
+  const renderTypedChars = () => {
+    if (typed.length === 0) return null;
+
+    const chars: React.ReactNode[] = [];
+    for (let i = 0; i < typed.length; i++) {
+      const target = currentWord[i];
+      const typedChar = typed[i];
+
+      if (target === undefined) {
+        chars.push(
+          <span
+            key={i}
+            style={{ color: "#f44336", textDecoration: "line-through" }}
+          >
+            {typedChar}
+          </span>
+        );
+      } else if (typedChar === target) {
+        chars.push(
+          <span key={i} style={{ color: "#66bb6a" }}>
+            {typedChar}
+          </span>
+        );
+      } else {
+        chars.push(
+          <span
+            key={i}
+            style={{ color: "#f44336", textDecoration: "line-through" }}
+          >
+            {typedChar}
+          </span>
+        );
+      }
+    }
+
+    return <span>{chars}</span>;
+  };
+
+  const untypedPortion = currentWord.slice(typed.length);
+  const upcomingWords = words
+    .slice(wordIndex + 1, wordIndex + 30)
+    .join(" ");
+  const remainingText =
+    untypedPortion + (upcomingWords ? " " + upcomingWords : "");
 
   return (
-      <Stack direction="column" spacing={5}>
-        <Stack direction="row" spacing={4}>
-          <Select
-            value={selectedTime}
-            onChange={handleTimeChange}
-            style={{ width: "155px" }}
+    <>
+      <style>{cursorKeyframes}</style>
+      <Box sx={{ width: "100%", maxWidth: 800, px: { xs: 2, sm: 3 } }}>
+        <Stack direction="column" spacing={3} alignItems="center">
+          <Timer time={timer} />
+
+          <Stack
+            direction="row"
+            onClick={focusInput}
+            sx={{ width: "100%", cursor: "text" }}
           >
-            <MenuItem value={60}>One Minute</MenuItem>
-            <MenuItem value={120}>Two Minutes</MenuItem>
-            <MenuItem value={180}>Three Minutes</MenuItem>
-          </Select>
-          <Select
-            value={keyboardType}
-            onChange={handleTypeChange}
-            style={{ width: "155px" }}
-          >
-            <MenuItem value={"qwerty"}>QWERTY</MenuItem>
-            <MenuItem value={"dvorak"}>DVORAK</MenuItem>
-            <MenuItem value={"colemark"}>COLEMARK</MenuItem>
-          </Select>
-          <Select
-            value={theme}
-            onChange={handleThemeChange}
-            style={{ width: "155px" }}
-          >
-            <MenuItem value={0}>Light Theme</MenuItem>
-            <MenuItem value={1}>Dark Theme</MenuItem>
-          </Select>
-          <Button
-            variant="contained"
-            onClick={(e) => (testRunning ? resetTest() : null)}
-          >
-            Reset Test
-          </Button>
+            <Box
+              sx={{
+                width: "50%",
+                fontSize: { xs: 20, sm: 28, md: 32 },
+                textAlign: "right",
+                borderBottom: "1px solid",
+                borderColor: "text.secondary",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                lineHeight: "1.4375em",
+                py: "4px",
+              }}
+            >
+              {renderTypedChars()}
+              {inputFocused && (
+                <span
+                  style={{
+                    borderRight: "2px solid",
+                    animation: "blink-cursor 1s step-end infinite",
+                  }}
+                >
+                  &#8203;
+                </span>
+              )}
+            </Box>
+            <TextField
+              disabled
+              variant="standard"
+              InputProps={{
+                style: { fontSize: "inherit" },
+              }}
+              sx={{ width: "50%", fontSize: { xs: 20, sm: 28, md: 32 } }}
+              value={remainingText}
+            />
+          </Stack>
         </Stack>
 
-        <Stack direction="row" spacing={4} justifyContent="center">
-          <Timer time={testRunning ? timer : selectedTime} />
+        <input
+          ref={inputRef}
+          onKeyDown={handleKeyDown}
+          onFocus={() => setInputFocused(true)}
+          onBlur={() => setInputFocused(false)}
+          style={{
+            position: "fixed",
+            left: "-9999px",
+            top: "-9999px",
+            opacity: 0,
+          }}
+          autoComplete="off"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+        />
+
+        <Stack alignItems="center" sx={{ mt: { xs: 8, sm: 12, md: 16 } }}>
+          <Typography variant="h2" fontWeight="bold" sx={{ fontSize: { xs: "2.5rem", sm: "3.75rem" } }}>
+            {score}
+          </Typography>
+          {!testRunning && timer === TEST_DURATION && (
+            <Typography variant="body2" color="text.secondary">
+              words per minute
+            </Typography>
+          )}
         </Stack>
 
         <Stack
           direction="row"
-          style={{ color: "text.primary", backgroundColor: "primary" }}
+          spacing={5}
+          justifyContent="center"
+          sx={{ mt: 8 }}
         >
-          <TextField
-            id="typing-box"
-            autoComplete="off"
-            variant="standard"
-            dir="rtl"
-            style={{ maxWidth: "200px" }}
-            InputProps={{ style: { fontSize: 40 } }}
-            onKeyDown={(e) => handleKeyDown(e)}
-            value={value}
-          />
-          <TextField
-            disabled={true}
-            variant="standard"
-            InputProps={{ style: { fontSize: 40 } }}
-            value={currentWords}
-          />
+          <Stack alignItems="center">
+            <Typography variant="h5" fontWeight="bold" color="error">
+              {mistakes}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              mistakes
+            </Typography>
+          </Stack>
+          <Stack alignItems="center">
+            <Typography variant="h5" fontWeight="bold">
+              {accuracy}%
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              accuracy
+            </Typography>
+          </Stack>
         </Stack>
 
-        <Stack direction="row" spacing={10}>
-          <Typography>{"Score: " + score}</Typography>
-        </Stack>
-      </Stack>
+        {testRunning && (
+          <Stack alignItems="center" sx={{ mt: 3 }}>
+            <Button
+              variant="outlined"
+              color="error"
+              size="small"
+              onClick={handleQuit}
+            >
+              Quit
+            </Button>
+          </Stack>
+        )}
+      </Box>
+
+      <Dialog
+        open={showModal}
+        onClose={handleCloseModal}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ textAlign: "center" }}>Test Complete</DialogTitle>
+        <DialogContent>
+          <Box sx={{ textAlign: "center", py: 2 }}>
+            <Typography variant="h1" fontWeight="bold" color="primary">
+              {finalScoreRef.current}
+            </Typography>
+            <Typography variant="h6" color="text.secondary" sx={{ mt: 1 }}>
+              words per minute
+            </Typography>
+            <Stack
+              direction="row"
+              spacing={4}
+              justifyContent="center"
+              sx={{ mt: 3 }}
+            >
+              <Stack alignItems="center">
+                <Typography variant="h5" fontWeight="bold" color="error">
+                  {finalMistakesRef.current}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  mistake{finalMistakesRef.current !== 1 ? "s" : ""}
+                </Typography>
+              </Stack>
+              <Stack alignItems="center">
+                <Typography variant="h5" fontWeight="bold">
+                  {finalAccuracyRef.current}%
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  accuracy
+                </Typography>
+              </Stack>
+            </Stack>
+            {!userId && (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mt: 2 }}
+              >
+                Log in to save your scores!
+              </Typography>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: "center", pb: 3 }}>
+          <Button variant="contained" onClick={handleCloseModal}>
+            Try Again
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 };
 

@@ -1,5 +1,5 @@
-import { Button, Stack, TextField, Typography } from "@mui/material";
-import { useState } from "react";
+import { Button, Stack, TextField } from "@mui/material";
+import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { register } from "../state/userServices";
 
@@ -22,64 +22,63 @@ const Register: React.FC<{}> = () => {
     }));
   };
 
-  const onSubmit = (e: any) => {
+  const onSubmit = (e: FormEvent) => {
+    e.preventDefault();
     if (password !== password2) {
       console.log("Passwords do not match!");
-    } else {
-      const userData = {
-        name,
-        email,
-        password,
-      };
-      try {
-        const res = register(userData);
-        res.then(() => navigate("/home"));
-      } catch (error: any) {
-        console.log(error);
-      }
+      return;
+    }
+    const userData = { name, email, password };
+    try {
+      register(userData).then(() => navigate("/home"));
+    } catch (error: any) {
+      console.log(error);
     }
   };
 
   return (
-    <>
-      <Stack textAlign="center" mb={2}>
-        <Typography fontSize={"28px"}>Register</Typography>
-      </Stack>
-
-      <Stack direction="column" spacing={2}>
-        <TextField
-          type="text"
-          name="name"
-          value={name}
-          placeholder="Enter your name"
-          onChange={onChange}
-        />
-        <TextField
-          type="email"
-          name="email"
-          value={email}
-          placeholder="Enter your email"
-          onChange={onChange}
-        />
-        <TextField
-          type="password"
-          name="password"
-          value={password}
-          placeholder="Enter password"
-          onChange={onChange}
-        />
-        <TextField
-          type="password"
-          name="password2"
-          value={password2}
-          placeholder="Confirm password"
-          onChange={onChange}
-        />
-        <Button onClick={(e) => onSubmit(e)} variant="contained">
-          Submit
-        </Button>
-      </Stack>
-    </>
+    <Stack
+      component="form"
+      direction="column"
+      spacing={2}
+      onSubmit={onSubmit}
+    >
+      <TextField
+        type="text"
+        name="name"
+        value={name}
+        label="Name"
+        onChange={onChange}
+        autoComplete="name"
+      />
+      <TextField
+        type="email"
+        name="email"
+        value={email}
+        label="Email"
+        onChange={onChange}
+        autoComplete="email"
+      />
+      <TextField
+        type="password"
+        name="password"
+        value={password}
+        label="Password"
+        onChange={onChange}
+        autoComplete="new-password"
+      />
+      <TextField
+        type="password"
+        name="password2"
+        value={password2}
+        label="Confirm Password"
+        onChange={onChange}
+        autoComplete="new-password"
+      />
+      <Button type="submit" variant="contained">
+        Register
+      </Button>
+    </Stack>
   );
 };
 

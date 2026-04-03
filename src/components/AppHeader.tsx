@@ -1,31 +1,68 @@
-import { AppBar, Box, Button, Toolbar } from "@mui/material";
+import {
+  AppBar,
+  Box,
+  Button,
+  IconButton,
+  Toolbar,
+  Tooltip,
+} from "@mui/material";
+import AccountCircleIcon from "@mui/icons-material/AccountCircle";
+import Brightness4Icon from "@mui/icons-material/Brightness4";
+import Brightness7Icon from "@mui/icons-material/Brightness7";
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { isUserLoggedIn } from "../core/isUserLoggedIn";
 
-const AppHeader: React.FC<{}> = () => {
+const AppHeader: React.FC<{
+  theme: number;
+  onToggleTheme: () => void;
+}> = ({ theme, onToggleTheme }) => {
   const navigate = useNavigate();
 
-  const routes = isUserLoggedIn()
-    ? ["Home", "Scores", "Keyboards", "Profile"]
-    : ["Home", "Scores", "Login", "Register"];
-
   return (
-    <AppBar position="static">
-      <Toolbar>
-        <Box sx={{ flexGrow: 1, display: { xs: "none", md: "flex" } }}>
-          {routes.map((route) => (
-            <Button
-              key={route}
-              onClick={() => {
-                navigate("/" + route);
-              }}
-              sx={{ my: 2, color: "white", display: "block" }}
-            >
-              {route}
-            </Button>
-          ))}
+    <AppBar
+      position="static"
+      elevation={0}
+      sx={{
+        background: "transparent",
+        backdropFilter: "blur(12px)",
+        px: { xs: 1, sm: 4, md: "200px" },
+      }}
+    >
+      <Toolbar disableGutters>
+        <Box sx={{ display: "flex", gap: { xs: 0, sm: 1 } }}>
+          <Button
+            sx={{ color: "text.primary", fontSize: { xs: 14, sm: 18 }, px: { xs: 1, sm: 2 } }}
+            onClick={() => navigate("/home")}
+          >
+            Home
+          </Button>
+          <Button
+            sx={{ color: "text.primary", fontSize: { xs: 14, sm: 18 }, px: { xs: 1, sm: 2 } }}
+            onClick={() => navigate("/scores")}
+          >
+            Scores
+          </Button>
         </Box>
+
+        <Box sx={{ flexGrow: 1 }} />
+
+        <Tooltip title={theme === 0 ? "Dark mode" : "Light mode"}>
+          <IconButton sx={{ color: "text.primary" }} onClick={onToggleTheme}>
+            {theme === 0 ? <Brightness4Icon /> : <Brightness7Icon />}
+          </IconButton>
+        </Tooltip>
+
+        <Tooltip title={isUserLoggedIn() ? "Profile" : "Login / Register"}>
+          <IconButton
+            sx={{ color: "text.primary" }}
+            onClick={() =>
+              navigate(isUserLoggedIn() ? "/profile" : "/account")
+            }
+          >
+            <AccountCircleIcon />
+          </IconButton>
+        </Tooltip>
       </Toolbar>
     </AppBar>
   );

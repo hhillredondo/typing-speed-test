@@ -6,14 +6,11 @@ const App: React.FC<{}> = () => {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<Main view={""} />} />
-        <Route path="/home" element={<Main view={""} />} />
-        <Route path="/scores" element={<Main view={"scores"} />} />
-        <Route path="/profile" element={<Main view={"profile"} />} />
-        <Route path="/keyboards" element={<Main view={"keyboards"} />} />
-        <Route path="/login" element={<Main view={"login"} />} />
-        <Route path="/register" element={<Main view={"register"} />} />
-        <Route path="/logout" element={<Main view={"login"} />} />
+        <Route path="/" element={<Main view="" />} />
+        <Route path="/home" element={<Main view="" />} />
+        <Route path="/scores" element={<Main view="scores" />} />
+        <Route path="/profile" element={<Main view="profile" />} />
+        <Route path="/account" element={<Main view="account" />} />
       </Routes>
     </Router>
   );

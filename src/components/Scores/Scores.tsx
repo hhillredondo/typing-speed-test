@@ -1,54 +1,130 @@
-import { Divider, Stack, Typography } from "@mui/material";
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import {
+  Box,
+  Paper,
+  Tab,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Tabs,
+  Typography,
+} from "@mui/material";
+import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
+import React, { useEffect, useState } from "react";
 import { getScores } from "../../state/scoreServices";
-import ScoreTable from "./components/ScoresTable";
+import { isUserLoggedIn } from "../../core/isUserLoggedIn";
 
-const Scores: React.FC<{}> = () => {
-  const [lightScores, setLightScores] = useState();
-  const [darkScores, setDarkScores] = useState();
+interface Score {
+  _id: string;
+  user: string;
+  userName: string;
+  score: number;
+  createdAt: string;
+}
+
+const medalColor = (idx: number) => {
+  if (idx === 0) return "#FFD700";
+  if (idx === 1) return "#C0C0C0";
+  if (idx === 2) return "#CD7F32";
+  return undefined;
+};
+
+const Scores: React.FC = () => {
+  const [allScores, setAllScores] = useState<Score[]>([]);
+  const [tab, setTab] = useState(0);
+
+  const userStr = localStorage.getItem("user");
+  const user = userStr ? JSON.parse(userStr) : null;
+  const loggedIn = isUserLoggedIn();
 
   useEffect(() => {
-    try {
-      const res = getScores();
-      res.then((result) => {
-        setLightScores(result.filter((score: any) => score.theme == false));
-        setDarkScores(result.filter((score: any) => score.theme == true));
-      });
-    } catch (error) {
-      console.log(error);
-    }
+    getScores()
+      .then((data: Score[]) => setAllScores(data))
+      .catch(console.error);
   }, []);
 
-  const navigate = useNavigate();
+  const globalSorted = [...allScores].sort((a, b) => b.score - a.score);
+  const personalSorted = loggedIn
+    ? globalSorted.filter((s) => s.user === user?._id)
+    : [];
+
+  const renderTable = (scores: Score[], showUser: boolean) => {
+    if (scores.length === 0) {
+      return (
+        <Typography variant="body1" color="text.secondary" sx={{ py: 4 }}>
+          No scores yet.
+        </Typography>
+      );
+    }
+
+    return (
+      <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 500 }}>
+        <Table stickyHeader size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell sx={{ width: 60 }}>#</TableCell>
+              {showUser && <TableCell>Player</TableCell>}
+              <TableCell align="right">WPM</TableCell>
+              <TableCell align="right">Date</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {scores.map((s, idx) => (
+              <TableRow key={s._id}>
+                <TableCell>
+                  {medalColor(idx) ? (
+                    <EmojiEventsIcon
+                      sx={{ color: medalColor(idx), fontSize: 20, verticalAlign: "middle" }}
+                    />
+                  ) : (
+                    idx + 1
+                  )}
+                </TableCell>
+                {showUser && (
+                  <TableCell>
+                    {loggedIn && s.user === user?._id ? (
+                      <strong>{s.userName}</strong>
+                    ) : (
+                      s.userName
+                    )}
+                  </TableCell>
+                )}
+                <TableCell align="right">
+                  <strong>{s.score}</strong>
+                </TableCell>
+                <TableCell align="right">
+                  {new Date(s.createdAt).toLocaleDateString()}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    );
+  };
 
   return (
-    <Stack textAlign={"center"} direction="column" spacing={3}>
-      <Typography variant={"h3"}>Global Scores</Typography>
-      <Typography variant={"h6"}>
-        For personal scores check your{" "}
-        <span
-          style={{ cursor: "pointer" }}
-          onClick={() => navigate("/profile")}
-        >
-          Profile
-        </span>
+    <Box sx={{ width: "100%", maxWidth: 700, px: { xs: 2, sm: 3 } }}>
+      <Typography variant="h4" textAlign="center" gutterBottom>
+        Scores
       </Typography>
-      <Stack
-        direction="row"
-        divider={<Divider orientation="vertical" flexItem />}
-        spacing={2}
-      >
-        <Stack direction="column" textAlign={"center"} spacing={2}>
-          <Typography variant={"h5"}>Light Theme</Typography>
-          <ScoreTable data={lightScores}></ScoreTable>
-        </Stack>
-        <Stack direction="column" textAlign={"center"} spacing={2}>
-          <Typography variant={"h5"}>Dark Theme</Typography>
-          <ScoreTable data={darkScores}></ScoreTable>
-        </Stack>
-      </Stack>
-    </Stack>
+
+      <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="fullWidth" sx={{ mb: 3 }}>
+        <Tab label="Leaderboard" />
+        <Tab label="My Scores" disabled={!loggedIn} />
+      </Tabs>
+
+      {tab === 0 && renderTable(globalSorted, true)}
+      {tab === 1 && renderTable(personalSorted, false)}
+
+      {tab === 1 && !loggedIn && (
+        <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ mt: 2 }}>
+          Log in to see your personal scores.
+        </Typography>
+      )}
+    </Box>
   );
 };
 
