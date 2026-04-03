@@ -75,7 +75,7 @@ export CDK_DEFAULT_ACCOUNT=123456789012
    aws cloudfront create-invalidation --distribution-id DISTRIBUTION_ID --paths "/*"
    ```
 
-## Frontend environment variables
+## App environment variables
 
 Point the React app at the deployed API and Cognito (example names—match your Outputs):
 

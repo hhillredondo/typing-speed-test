@@ -1,8 +1,8 @@
 {
-  "name": "typing-speed-infra",
+  "name": "typing-speed-test-infra",
   "version": "1.0.0",
   "private": true,
-  "description": "AWS CDK infrastructure for typing-speed app (dev + prod)",
+  "description": "AWS CDK infrastructure for typing-speed-test (dev + prod)",
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
