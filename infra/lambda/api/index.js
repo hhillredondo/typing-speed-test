@@ -291,9 +291,22 @@ async function updateAnalyticsProfile(userId, score, accuracy, mistakes, analyti
     totalTests: 0,
     rollingKeyStats: {},
     rollingBigramStats: {},
+    rollingBackspaceStats: {
+      totalBackspaces: 0, wordsWithBackspace: 0,
+      wordsRecovered: 0, wordsFailed: 0,
+      totalConsecutiveRuns: 0, totalConsecutiveLength: 0,
+    },
     recentWpm: [],
     recentAccuracy: [],
   };
+
+  if (!profile.rollingBackspaceStats) {
+    profile.rollingBackspaceStats = {
+      totalBackspaces: 0, wordsWithBackspace: 0,
+      wordsRecovered: 0, wordsFailed: 0,
+      totalConsecutiveRuns: 0, totalConsecutiveLength: 0,
+    };
+  }
 
   profile.totalTests += 1;
 
@@ -319,6 +332,17 @@ async function updateAnalyticsProfile(userId, score, accuracy, mistakes, analyti
       r.totalLatencyMs += bg.avgLatencyMs * bg.count;
       r.count += bg.count;
     }
+  }
+
+  if (analytics.backspaceStats) {
+    const bs = analytics.backspaceStats;
+    const r = profile.rollingBackspaceStats;
+    r.totalBackspaces += bs.totalBackspaces;
+    r.wordsWithBackspace += bs.wordsWithBackspace;
+    r.wordsRecovered += bs.wordsRecovered;
+    r.wordsFailed += bs.wordsFailed;
+    r.totalConsecutiveRuns += bs.consecutiveRuns;
+    r.totalConsecutiveLength += bs.totalConsecutiveLength;
   }
 
   profile.recentWpm = [...profile.recentWpm, score].slice(-RECENT_HISTORY_SIZE);

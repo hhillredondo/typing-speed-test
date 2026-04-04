@@ -8,6 +8,7 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
+import BackspaceIcon from "@mui/icons-material/Backspace";
 import SpeedIcon from "@mui/icons-material/Speed";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
@@ -15,7 +16,7 @@ import TrendingFlatIcon from "@mui/icons-material/TrendingFlat";
 import React, { useEffect, useState } from "react";
 import { isUserLoggedIn } from "../../core/isUserLoggedIn";
 import { getAnalyticsProfile } from "../../state/scoreServices";
-import type { AnalyticsProfile } from "../../types/analytics";
+import type { AnalyticsProfile, RollingBackspaceStats } from "../../types/analytics";
 import KeyboardHeatmap from "./KeyboardHeatmap";
 import FatigueChart from "./FatigueChart";
 import ProgressChart from "./ProgressChart";
@@ -79,6 +80,47 @@ function generateInsights(profile: AnalyticsProfile): string[] {
 
   return insights;
 }
+
+const BackspaceSection: React.FC<{
+  stats: RollingBackspaceStats;
+  totalTests: number;
+}> = ({ stats, totalTests }) => {
+  const avgPerTest = totalTests > 0 ? (stats.totalBackspaces / totalTests).toFixed(1) : "0";
+  const avgConsecutive =
+    stats.totalConsecutiveRuns > 0
+      ? (stats.totalConsecutiveLength / stats.totalConsecutiveRuns).toFixed(1)
+      : "0";
+  const recoveryRate =
+    stats.wordsWithBackspace > 0
+      ? Math.round((stats.wordsRecovered / stats.wordsWithBackspace) * 100)
+      : 0;
+
+  const items = [
+    { label: "Avg backspaces / test", value: avgPerTest },
+    { label: "Words recovered with backspace", value: String(stats.wordsRecovered) },
+    { label: "Words still wrong despite backspace", value: String(stats.wordsFailed) },
+    { label: "Recovery rate", value: `${recoveryRate}%` },
+    { label: "Consecutive backspace bursts", value: String(stats.totalConsecutiveRuns) },
+    { label: "Avg consecutive backspaces / burst", value: avgConsecutive },
+  ];
+
+  return (
+    <Grid container spacing={1}>
+      {items.map((item) => (
+        <Grid item xs={6} sm={4} key={item.label}>
+          <Box sx={{ textAlign: "center", py: 0.5 }}>
+            <Typography variant="h5" fontWeight="bold">
+              {item.value}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {item.label}
+            </Typography>
+          </Box>
+        </Grid>
+      ))}
+    </Grid>
+  );
+};
 
 const Analytics: React.FC = () => {
   const [profile, setProfile] = useState<AnalyticsProfile | null>(null);
@@ -321,6 +363,23 @@ const Analytics: React.FC = () => {
           </Card>
         </Grid>
       </Grid>
+
+      {profile.rollingBackspaceStats && (
+        <Card sx={{ mb: 2 }}>
+          <CardContent>
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
+              <BackspaceIcon color="secondary" />
+              <Typography variant="h6" fontWeight="bold">
+                Backspace Analysis
+              </Typography>
+            </Stack>
+            <BackspaceSection
+              stats={profile.rollingBackspaceStats}
+              totalTests={profile.totalTests}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       <Grid container spacing={2}>
         <Grid item xs={12} md={6}>

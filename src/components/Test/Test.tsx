@@ -15,7 +15,7 @@ import englishWords from "../../assets/words/en.json";
 import Timer from "./components/Timer";
 import { shuffleArray } from "./utils";
 import { computeTestAnalytics } from "./utils/computeAnalytics";
-import type { KeystrokeEvent, WordEvent } from "../../types/analytics";
+import type { BackspaceEvent, KeystrokeEvent, WordEvent } from "../../types/analytics";
 
 const TEST_DURATION = 60;
 
@@ -57,8 +57,10 @@ const Test: React.FC<{ onTestRunning?: (running: boolean) => void }> = ({
   const totalKeysRef = useRef(0);
   const testStartTimeRef = useRef(0);
   const keystrokesRef = useRef<KeystrokeEvent[]>([]);
-  const backspaceTimestampsRef = useRef<number[]>([]);
+  const backspaceEventsRef = useRef<BackspaceEvent[]>([]);
   const wordEventsRef = useRef<WordEvent[]>([]);
+  const consecutiveRunsRef = useRef<number[]>([]);
+  const currentRunRef = useRef(0);
 
   useEffect(() => {
     scoreRef.current = score;
@@ -90,10 +92,16 @@ const Test: React.FC<{ onTestRunning?: (running: boolean) => void }> = ({
         ? Math.round((correctKeysRef.current / totalKeysRef.current) * 100)
         : 100;
 
+    if (currentRunRef.current > 0) {
+      consecutiveRunsRef.current.push(currentRunRef.current);
+      currentRunRef.current = 0;
+    }
+
     const analytics = computeTestAnalytics(
       keystrokesRef.current,
-      backspaceTimestampsRef.current,
+      backspaceEventsRef.current,
       wordEventsRef.current,
+      consecutiveRunsRef.current,
       TEST_DURATION
     );
 
@@ -132,8 +140,10 @@ const Test: React.FC<{ onTestRunning?: (running: boolean) => void }> = ({
     setTimer(TEST_DURATION);
     setTestRunning(false);
     keystrokesRef.current = [];
-    backspaceTimestampsRef.current = [];
+    backspaceEventsRef.current = [];
     wordEventsRef.current = [];
+    consecutiveRunsRef.current = [];
+    currentRunRef.current = 0;
   };
 
   const handleCloseModal = () => {
@@ -168,69 +178,81 @@ const Test: React.FC<{ onTestRunning?: (running: boolean) => void }> = ({
     });
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === " " || e.key === "Backspace") {
-      e.preventDefault();
+  const flushBackspaceRun = () => {
+    if (currentRunRef.current > 0) {
+      consecutiveRunsRef.current.push(currentRunRef.current);
+      currentRunRef.current = 0;
     }
+  };
 
-    if (!testRunning) {
-      if (e.key.length === 1 && e.key !== " ") {
-        setTestRunning(true);
-        setTimer(TEST_DURATION);
-        setScore(0);
-        setMistakes(0);
-        setCorrectKeys(0);
-        setTotalKeys(0);
+  const startTestWithKey = (key: string) => {
+    setTestRunning(true);
+    setTimer(TEST_DURATION);
+    setScore(0);
+    setMistakes(0);
+    setCorrectKeys(0);
+    setTotalKeys(0);
 
-        testStartTimeRef.current = performance.now();
-        keystrokesRef.current = [];
-        backspaceTimestampsRef.current = [];
-        wordEventsRef.current = [];
+    testStartTimeRef.current = performance.now();
+    keystrokesRef.current = [];
+    backspaceEventsRef.current = [];
+    wordEventsRef.current = [];
+    consecutiveRunsRef.current = [];
+    currentRunRef.current = 0;
 
-        const target = currentWord[0];
-        const isCorrect = target !== undefined && e.key === target;
-        setTotalKeys(1);
-        setCorrectKeys(isCorrect ? 1 : 0);
-        keystrokesRef.current.push({
-          key: e.key,
-          expected: target || "",
-          ts: 0,
-          correct: isCorrect,
-          wordIdx: wordIndex,
-          pos: 0,
-        });
+    const target = currentWord[0];
+    const isCorrect = target !== undefined && key === target;
+    setTotalKeys(1);
+    setCorrectKeys(isCorrect ? 1 : 0);
+    keystrokesRef.current.push({
+      key,
+      expected: target || "",
+      ts: 0,
+      correct: isCorrect,
+      wordIdx: wordIndex,
+      pos: 0,
+    });
+    setTyped(key);
+  };
 
-        setTyped(e.key);
-        return;
-      }
-      return;
-    }
-
-    if (e.key === " ") {
+  const handleRunningKey = (key: string) => {
+    if (key === " ") {
       if (typed.length === 0) return;
+      flushBackspaceRun();
       const isWordCorrect = typed === currentWord;
-      if (isWordCorrect) {
-        setScore((s) => s + 1);
-      } else {
-        setMistakes((m) => m + 1);
-      }
+      if (isWordCorrect) setScore((s) => s + 1);
+      else setMistakes((m) => m + 1);
       wordEventsRef.current.push({
         word: currentWord,
         typed,
         correct: isWordCorrect,
         ts: performance.now() - testStartTimeRef.current,
+        wordIdx: wordIndex,
       });
       setWordIndex((i) => i + 1);
       setTyped("");
-    } else if (e.key === "Backspace") {
-      backspaceTimestampsRef.current.push(
-        performance.now() - testStartTimeRef.current
-      );
+    } else if (key === "Backspace") {
+      currentRunRef.current += 1;
+      backspaceEventsRef.current.push({
+        ts: performance.now() - testStartTimeRef.current,
+        wordIdx: wordIndex,
+      });
       setTyped((t) => t.slice(0, -1));
-    } else if (e.key.length === 1) {
-      trackKeystroke(e.key, typed);
-      setTyped((t) => t + e.key);
+    } else if (key.length === 1) {
+      flushBackspaceRun();
+      trackKeystroke(key, typed);
+      setTyped((t) => t + key);
     }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === " " || e.key === "Backspace") e.preventDefault();
+
+    if (!testRunning) {
+      if (e.key.length === 1 && e.key !== " ") startTestWithKey(e.key);
+      return;
+    }
+    handleRunningKey(e.key);
   };
 
   const focusInput = () => inputRef.current?.focus();

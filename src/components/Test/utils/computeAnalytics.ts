@@ -1,4 +1,10 @@
-import type { KeystrokeEvent, WordEvent, TestAnalytics } from "../../../types/analytics";
+import type {
+  BackspaceEvent,
+  BackspaceStats,
+  KeystrokeEvent,
+  WordEvent,
+  TestAnalytics,
+} from "../../../types/analytics";
 
 const MAX_REASONABLE_LATENCY_MS = 5000;
 
@@ -109,17 +115,50 @@ function computeWindows(
   return windows;
 }
 
+function computeBackspaceStats(
+  backspaceEvents: BackspaceEvent[],
+  wordEvents: WordEvent[],
+  consecutiveRuns: number[]
+): BackspaceStats {
+  const wordsWithBs = new Set(backspaceEvents.map((e) => e.wordIdx));
+
+  let wordsRecovered = 0;
+  let wordsFailed = 0;
+  for (const we of wordEvents) {
+    if (!wordsWithBs.has(we.wordIdx)) continue;
+    if (we.correct) wordsRecovered++;
+    else wordsFailed++;
+  }
+
+  const totalConsecutiveLength = consecutiveRuns.reduce((a, b) => a + b, 0);
+  const maxConsecutiveLength = consecutiveRuns.length > 0 ? Math.max(...consecutiveRuns) : 0;
+
+  return {
+    totalBackspaces: backspaceEvents.length,
+    wordsWithBackspace: wordsWithBs.size,
+    wordsRecovered,
+    wordsFailed,
+    consecutiveRuns: consecutiveRuns.length,
+    totalConsecutiveLength,
+    maxConsecutiveLength,
+  };
+}
+
 export function computeTestAnalytics(
   keystrokes: KeystrokeEvent[],
-  backspaceTimestamps: number[],
+  backspaceEvents: BackspaceEvent[],
   wordEvents: WordEvent[],
+  consecutiveRuns: number[],
   testDurationSec: number
 ): TestAnalytics {
+  const backspaceStats = computeBackspaceStats(backspaceEvents, wordEvents, consecutiveRuns);
+
   return {
     keyStats: computeKeyStats(keystrokes),
     bigramStats: computeBigramStats(keystrokes),
     windows: computeWindows(keystrokes, wordEvents, testDurationSec),
-    totalBackspaces: backspaceTimestamps.length,
+    backspaceStats,
+    totalBackspaces: backspaceEvents.length,
     totalKeystrokes: keystrokes.length,
     wordsAttempted: wordEvents.length,
   };

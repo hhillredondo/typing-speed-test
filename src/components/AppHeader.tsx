@@ -1,7 +1,6 @@
 import {
   AppBar,
   Box,
-  Button,
   IconButton,
   Toolbar,
   Tooltip,
@@ -10,7 +9,9 @@ import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import BarChartIcon from "@mui/icons-material/BarChart";
 import Brightness4Icon from "@mui/icons-material/Brightness4";
 import Brightness7Icon from "@mui/icons-material/Brightness7";
+import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import FitnessCenterIcon from "@mui/icons-material/FitnessCenter";
+import HomeIcon from "@mui/icons-material/Home";
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { isUserLoggedIn } from "../core/isUserLoggedIn";
@@ -32,22 +33,23 @@ const AppHeader: React.FC<{
       }}
     >
       <Toolbar disableGutters>
-        <Box sx={{ display: "flex", gap: { xs: 0, sm: 1 } }}>
-          <Button
-            sx={{ color: "text.primary", fontSize: { xs: 14, sm: 18 }, px: { xs: 1, sm: 2 } }}
-            onClick={() => navigate("/home")}
-          >
-            Home
-          </Button>
-          <Button
-            sx={{ color: "text.primary", fontSize: { xs: 14, sm: 18 }, px: { xs: 1, sm: 2 } }}
-            onClick={() => navigate("/scores")}
-          >
-            Scores
-          </Button>
-        </Box>
-
         <Box sx={{ display: "flex", gap: 0 }}>
+          <Tooltip title="Home">
+            <IconButton
+              sx={{ color: "text.primary" }}
+              onClick={() => navigate("/home")}
+            >
+              <HomeIcon />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Scores">
+            <IconButton
+              sx={{ color: "text.primary" }}
+              onClick={() => navigate("/scores")}
+            >
+              <EmojiEventsIcon />
+            </IconButton>
+          </Tooltip>
           <Tooltip title="Analytics">
             <IconButton
               sx={{ color: "text.primary" }}
