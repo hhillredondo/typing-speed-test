@@ -5,6 +5,7 @@ const {
   GetCommand,
   QueryCommand,
   UpdateCommand,
+  DeleteCommand,
 } = require("@aws-sdk/lib-dynamodb");
 const {
   CognitoIdentityProviderClient,
@@ -13,6 +14,7 @@ const {
   ResendConfirmationCodeCommand,
   InitiateAuthCommand,
   AdminGetUserCommand,
+  AdminDeleteUserCommand,
 } = require("@aws-sdk/client-cognito-identity-provider");
 const crypto = require("crypto");
 
@@ -199,6 +201,76 @@ async function handleGetMe(event) {
     });
   } catch {
     return response(401, { message: "Not authorized" });
+  }
+}
+
+async function deleteAllUserDdbItems(userId) {
+  const pk = `USER#${userId}`;
+  let lastKey;
+  do {
+    const result = await ddb.send(new QueryCommand({
+      TableName: TABLE,
+      KeyConditionExpression: "pk = :pk",
+      ExpressionAttributeValues: { ":pk": pk },
+      ExclusiveStartKey: lastKey,
+    }));
+    for (const item of result.Items || []) {
+      await ddb.send(new DeleteCommand({
+        TableName: TABLE,
+        Key: { pk: item.pk, sk: item.sk },
+      }));
+    }
+    lastKey = result.LastEvaluatedKey;
+  } while (lastKey);
+}
+
+async function handleDeleteAccount(event) {
+  const authHeader = event.headers?.authorization || "";
+  if (!authHeader.startsWith("Bearer ")) {
+    return response(401, { message: "Not authorized, no token" });
+  }
+
+  const { password } = parseBody(event);
+  if (!password) {
+    return response(400, { message: "Password is required to delete your account" });
+  }
+
+  let claims;
+  try {
+    claims = decodeJwtPayload(authHeader.split(" ")[1]);
+  } catch {
+    return response(401, { message: "Not authorized" });
+  }
+
+  const email = claims.email;
+  const sub = claims.sub;
+  if (!email) {
+    return response(400, { message: "Could not resolve user email" });
+  }
+
+  try {
+    await cognito.send(new InitiateAuthCommand({
+      ClientId: CLIENT_ID,
+      AuthFlow: "USER_PASSWORD_AUTH",
+      AuthParameters: { USERNAME: email, PASSWORD: password },
+    }));
+  } catch (err) {
+    if (err.name === "NotAuthorizedException" || err.name === "UserNotFoundException") {
+      return response(400, { message: "Invalid password" });
+    }
+    return response(500, { message: err.message });
+  }
+
+  try {
+    await deleteAllUserDdbItems(sub);
+    await cognito.send(new AdminDeleteUserCommand({
+      UserPoolId: USER_POOL_ID,
+      Username: email,
+    }));
+    return response(200, { message: "Account deleted" });
+  } catch (err) {
+    console.error("Delete account failed:", err);
+    return response(500, { message: err.message || "Failed to delete account" });
   }
 }
 
@@ -507,6 +579,7 @@ exports.handler = async (event) => {
     if (path === "/api/users/resend-code" && method === "POST") return await handleResendCode(event);
     if (path === "/api/users/login" && method === "POST") return await handleLogin(event);
     if (path === "/api/users/me" && method === "GET") return await handleGetMe(event);
+    if (path === "/api/users/me" && method === "DELETE") return await handleDeleteAccount(event);
     if (path === "/api/scores" && method === "POST") return await handleCreateScore(event);
     if (path === "/api/scores" && method === "GET") return await handleGetScores();
     if (path === "/api/analytics" && method === "GET") return await handleGetAnalytics(event);

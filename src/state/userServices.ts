@@ -41,3 +41,16 @@ export const login = async (userData: {
 export const logout = async () => {
   localStorage.setItem("user", "");
 };
+
+export const deleteAccount = async (password: string) => {
+  const raw = localStorage.getItem("user");
+  if (!raw) throw new Error("Not logged in");
+  const user = JSON.parse(raw) as { token?: string };
+  if (!user.token) throw new Error("Not logged in");
+
+  const response = await axios.delete(`${baseUrl}/api/users/me`, {
+    data: { password },
+    headers: { Authorization: `Bearer ${user.token}` },
+  });
+  return response.data;
+};

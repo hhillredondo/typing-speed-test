@@ -118,6 +118,7 @@ export class TypingSpeedStack extends Stack {
           "cognito-idp:ResendConfirmationCode",
           "cognito-idp:InitiateAuth",
           "cognito-idp:AdminGetUser",
+          "cognito-idp:AdminDeleteUser",
         ],
         resources: [this.userPool.userPoolArn],
       })
