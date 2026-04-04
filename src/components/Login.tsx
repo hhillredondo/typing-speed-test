@@ -1,10 +1,13 @@
-import { Button, Stack, TextField } from "@mui/material";
+import { Alert, Button, Stack, TextField } from "@mui/material";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { login } from "../state/userServices";
 
-const Login: React.FC<{}> = () => {
+const Login: React.FC = () => {
   const navigate = useNavigate();
+
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     email: "",
@@ -13,20 +16,21 @@ const Login: React.FC<{}> = () => {
 
   const { email, password } = formData;
 
-  const onChange = (e: any) => {
-    setFormData((prevState) => ({
-      ...prevState,
-      [e.target.name]: e.target.value,
-    }));
+  const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const onSubmit = (e: FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const userData = { email, password };
+    setError("");
+    setLoading(true);
     try {
-      login(userData).then(() => navigate("/home"));
-    } catch (error: any) {
-      console.log(error);
+      await login({ email, password });
+      navigate("/home");
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Login failed");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -37,6 +41,7 @@ const Login: React.FC<{}> = () => {
       spacing={2}
       onSubmit={onSubmit}
     >
+      {error && <Alert severity="error">{error}</Alert>}
       <TextField
         type="email"
         name="email"
@@ -53,8 +58,8 @@ const Login: React.FC<{}> = () => {
         onChange={onChange}
         autoComplete="current-password"
       />
-      <Button type="submit" variant="contained">
-        Login
+      <Button type="submit" variant="contained" disabled={loading}>
+        {loading ? "Logging in\u2026" : "Login"}
       </Button>
     </Stack>
   );

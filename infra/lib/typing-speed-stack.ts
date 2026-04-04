@@ -114,8 +114,9 @@ export class TypingSpeedStack extends Stack {
         effect: iam.Effect.ALLOW,
         actions: [
           "cognito-idp:SignUp",
+          "cognito-idp:ConfirmSignUp",
+          "cognito-idp:ResendConfirmationCode",
           "cognito-idp:InitiateAuth",
-          "cognito-idp:AdminConfirmSignUp",
           "cognito-idp:AdminGetUser",
         ],
         resources: [this.userPool.userPoolArn],

@@ -2,6 +2,8 @@ import { Box, createTheme, CssBaseline, Stack, ThemeProvider } from "@mui/materi
 import React, { useCallback, useState } from "react";
 import AppHeader from "../components/AppHeader";
 import Account from "../components/Account";
+import Analytics from "../components/Analytics/Analytics";
+import DrillMode from "../components/DrillMode/DrillMode";
 import Profile from "../components/Profile";
 import Scores from "../components/Scores/Scores";
 import Test from "../components/Test/Test";
@@ -139,6 +141,18 @@ const Main: React.FC<{ view: string }> = (props) => {
       {props.view === "scores" && (
         <Stack alignItems="center" sx={{ mt: 5 }}>
           <Scores />
+        </Stack>
+      )}
+
+      {props.view === "analytics" && (
+        <Stack alignItems="center" sx={{ mt: 5 }}>
+          <Analytics />
+        </Stack>
+      )}
+
+      {props.view === "drill" && (
+        <Stack alignItems="center" sx={{ mt: { xs: 6, sm: 10, md: 12 } }}>
+          <DrillMode />
         </Stack>
       )}
 

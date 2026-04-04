@@ -14,6 +14,8 @@ import { createScore } from "../../state/scoreServices";
 import englishWords from "../../assets/words/en.json";
 import Timer from "./components/Timer";
 import { shuffleArray } from "./utils";
+import { computeTestAnalytics } from "./utils/computeAnalytics";
+import type { KeystrokeEvent, WordEvent } from "../../types/analytics";
 
 const TEST_DURATION = 60;
 
@@ -53,6 +55,10 @@ const Test: React.FC<{ onTestRunning?: (running: boolean) => void }> = ({
   const mistakesRef = useRef(0);
   const correctKeysRef = useRef(0);
   const totalKeysRef = useRef(0);
+  const testStartTimeRef = useRef(0);
+  const keystrokesRef = useRef<KeystrokeEvent[]>([]);
+  const backspaceTimestampsRef = useRef<number[]>([]);
+  const wordEventsRef = useRef<WordEvent[]>([]);
 
   useEffect(() => {
     scoreRef.current = score;
@@ -84,11 +90,21 @@ const Test: React.FC<{ onTestRunning?: (running: boolean) => void }> = ({
         ? Math.round((correctKeysRef.current / totalKeysRef.current) * 100)
         : 100;
 
+    const analytics = computeTestAnalytics(
+      keystrokesRef.current,
+      backspaceTimestampsRef.current,
+      wordEventsRef.current,
+      TEST_DURATION
+    );
+
     if (userId) {
       createScore({
         user: userId,
         score: scoreRef.current,
         userName,
+        accuracy: finalAccuracyRef.current,
+        mistakes: mistakesRef.current,
+        analytics,
       }).catch(console.error);
     }
 
@@ -115,6 +131,9 @@ const Test: React.FC<{ onTestRunning?: (running: boolean) => void }> = ({
     setTotalKeys(0);
     setTimer(TEST_DURATION);
     setTestRunning(false);
+    keystrokesRef.current = [];
+    backspaceTimestampsRef.current = [];
+    wordEventsRef.current = [];
   };
 
   const handleCloseModal = () => {
@@ -133,10 +152,20 @@ const Test: React.FC<{ onTestRunning?: (running: boolean) => void }> = ({
   const trackKeystroke = (key: string, typedSoFar: string) => {
     const pos = typedSoFar.length;
     const target = currentWord[pos];
+    const isCorrect = target !== undefined && key === target;
     setTotalKeys((t) => t + 1);
-    if (target !== undefined && key === target) {
+    if (isCorrect) {
       setCorrectKeys((c) => c + 1);
     }
+    const ts = performance.now() - testStartTimeRef.current;
+    keystrokesRef.current.push({
+      key,
+      expected: target || "",
+      ts,
+      correct: isCorrect,
+      wordIdx: wordIndex,
+      pos,
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -153,9 +182,24 @@ const Test: React.FC<{ onTestRunning?: (running: boolean) => void }> = ({
         setCorrectKeys(0);
         setTotalKeys(0);
 
+        testStartTimeRef.current = performance.now();
+        keystrokesRef.current = [];
+        backspaceTimestampsRef.current = [];
+        wordEventsRef.current = [];
+
         const target = currentWord[0];
+        const isCorrect = target !== undefined && e.key === target;
         setTotalKeys(1);
-        setCorrectKeys(target !== undefined && e.key === target ? 1 : 0);
+        setCorrectKeys(isCorrect ? 1 : 0);
+        keystrokesRef.current.push({
+          key: e.key,
+          expected: target || "",
+          ts: 0,
+          correct: isCorrect,
+          wordIdx: wordIndex,
+          pos: 0,
+        });
+
         setTyped(e.key);
         return;
       }
@@ -164,14 +208,24 @@ const Test: React.FC<{ onTestRunning?: (running: boolean) => void }> = ({
 
     if (e.key === " ") {
       if (typed.length === 0) return;
-      if (typed === currentWord) {
+      const isWordCorrect = typed === currentWord;
+      if (isWordCorrect) {
         setScore((s) => s + 1);
       } else {
         setMistakes((m) => m + 1);
       }
+      wordEventsRef.current.push({
+        word: currentWord,
+        typed,
+        correct: isWordCorrect,
+        ts: performance.now() - testStartTimeRef.current,
+      });
       setWordIndex((i) => i + 1);
       setTyped("");
     } else if (e.key === "Backspace") {
+      backspaceTimestampsRef.current.push(
+        performance.now() - testStartTimeRef.current
+      );
       setTyped((t) => t.slice(0, -1));
     } else if (e.key.length === 1) {
       trackKeystroke(e.key, typed);

@@ -7,8 +7,10 @@ import {
   Tooltip,
 } from "@mui/material";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
+import BarChartIcon from "@mui/icons-material/BarChart";
 import Brightness4Icon from "@mui/icons-material/Brightness4";
 import Brightness7Icon from "@mui/icons-material/Brightness7";
+import FitnessCenterIcon from "@mui/icons-material/FitnessCenter";
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { isUserLoggedIn } from "../core/isUserLoggedIn";
@@ -43,6 +45,25 @@ const AppHeader: React.FC<{
           >
             Scores
           </Button>
+        </Box>
+
+        <Box sx={{ display: "flex", gap: 0 }}>
+          <Tooltip title="Analytics">
+            <IconButton
+              sx={{ color: "text.primary" }}
+              onClick={() => navigate("/analytics")}
+            >
+              <BarChartIcon />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Weakness Drill">
+            <IconButton
+              sx={{ color: "text.primary" }}
+              onClick={() => navigate("/drill")}
+            >
+              <FitnessCenterIcon />
+            </IconButton>
+          </Tooltip>
         </Box>
 
         <Box sx={{ flexGrow: 1 }} />
