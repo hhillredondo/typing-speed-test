@@ -193,7 +193,8 @@ Updated **after each scored test** when `analytics` is present (`infra/lambda/ap
 | **`slowestBigrams`** | Bigrams with **≥ 4** total occurrences in `rollingBigramStats`, sorted by **average latency** descending, **top 5**. |
 | **`fatigueArchetype`** | See §5 (from **latest test’s** `windows` only). |
 | **`wpmTrend`** | See §6 (from `recentWpm`). |
-| **`lastWindows`** | Copy of **`analytics.windows`** from the **most recent** submitted test (used for “Latest Test Pacing”). |
+| **`rollingWindows`** (internal) | Per-window accumulators: `{ startSec, totalWpm, totalAccuracy, count }` for each of the 6 windows. Updated additively after each test. Not exposed to the frontend. |
+| **`avgWindows`** | Derived from `rollingWindows`: `{ startSec, avgWpm, avgAccuracy, count }`. Returned to the frontend for the "Average Pacing" chart. |
 | **`updatedAt`** | ISO timestamp. |
 
 ---
@@ -239,7 +240,7 @@ The Analytics UI shows an up / flat / down icon using thresholds **±0.5** on th
 | Weakest keys table | `weakestKeys` from API. |
 | Slowest bigrams table | `slowestBigrams` from API. |
 | Backspace analysis | `rollingBackspaceStats` + `totalTests`: avg backspaces/test, words recovered, words failed, recovery rate, burst count, avg burst length. |
-| Latest test pacing chart | `lastWindows`. |
+| Average pacing chart | `avgWindows` (derived from `rollingWindows`). |
 | WPM progress chart | `recentWpm` (line vs. test index). |
 
 ---

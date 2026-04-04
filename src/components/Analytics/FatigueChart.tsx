@@ -3,9 +3,9 @@ import React from "react";
 
 interface WindowData {
   startSec: number;
-  wpm: number;
-  accuracy: number;
-  keystrokes: number;
+  avgWpm: number;
+  avgAccuracy: number;
+  count: number;
 }
 
 interface Props {
@@ -23,7 +23,7 @@ const FatigueChart: React.FC<Props> = ({ windows }) => {
     );
   }
 
-  const maxWpm = Math.max(...windows.map((w) => w.wpm), 1);
+  const maxWpm = Math.max(...windows.map((w) => w.avgWpm), 1);
   const barWidth = 48;
   const gap = 10;
   const chartWidth = windows.length * (barWidth + gap);
@@ -39,12 +39,12 @@ const FatigueChart: React.FC<Props> = ({ windows }) => {
         style={{ minWidth: 280 }}
       >
         {windows.map((w, i) => {
-          const barHeight = maxWpm > 0 ? (w.wpm / maxWpm) * chartHeight : 0;
+          const barHeight = maxWpm > 0 ? (w.avgWpm / maxWpm) * chartHeight : 0;
           const x = i * (barWidth + gap);
           const y = topPad + chartHeight - barHeight;
 
           return (
-            <g key={i}>
+            <g key={w.startSec}>
               <rect
                 x={x}
                 y={y}
@@ -62,7 +62,7 @@ const FatigueChart: React.FC<Props> = ({ windows }) => {
                 fontWeight="bold"
                 fill={theme.palette.text.primary}
               >
-                {w.wpm}
+                {w.avgWpm}
               </text>
               <text
                 x={x + barWidth / 2}

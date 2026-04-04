@@ -348,90 +348,101 @@ async function handleGetScores() {
 
 const RECENT_HISTORY_SIZE = 50;
 
+function newBackspaceStats() {
+  return {
+    totalBackspaces: 0, wordsWithBackspace: 0,
+    wordsRecovered: 0, wordsFailed: 0,
+    totalConsecutiveRuns: 0, totalConsecutiveLength: 0,
+  };
+}
+
+function mergeKeyStats(rolling, keyStats) {
+  for (const [key, stats] of Object.entries(keyStats)) {
+    if (!rolling[key]) {
+      rolling[key] = { correct: 0, errors: 0, totalLatencyMs: 0, count: 0 };
+    }
+    const r = rolling[key];
+    r.correct += stats.correct;
+    r.errors += stats.errors;
+    r.totalLatencyMs += stats.avgLatencyMs * (stats.correct + stats.errors);
+    r.count += stats.correct + stats.errors;
+  }
+}
+
+function mergeBigramStats(rolling, bigramStats) {
+  for (const bg of bigramStats) {
+    if (!rolling[bg.bigram]) {
+      rolling[bg.bigram] = { totalLatencyMs: 0, count: 0 };
+    }
+    const r = rolling[bg.bigram];
+    r.totalLatencyMs += bg.avgLatencyMs * bg.count;
+    r.count += bg.count;
+  }
+}
+
+function mergeBackspaceStats(rolling, bs) {
+  rolling.totalBackspaces += bs.totalBackspaces;
+  rolling.wordsWithBackspace += bs.wordsWithBackspace;
+  rolling.wordsRecovered += bs.wordsRecovered;
+  rolling.wordsFailed += bs.wordsFailed;
+  rolling.totalConsecutiveRuns += bs.consecutiveRuns;
+  rolling.totalConsecutiveLength += bs.totalConsecutiveLength;
+}
+
+function mergeWindows(profile, windows) {
+  if (!profile.rollingWindows) {
+    profile.rollingWindows = windows.map((w) => ({
+      startSec: w.startSec, totalWpm: 0, totalAccuracy: 0, count: 0,
+    }));
+  }
+  for (let i = 0; i < windows.length && i < profile.rollingWindows.length; i++) {
+    profile.rollingWindows[i].totalWpm += windows[i].wpm;
+    profile.rollingWindows[i].totalAccuracy += windows[i].accuracy;
+    profile.rollingWindows[i].count += 1;
+  }
+}
+
+function computeAvgWindows(rollingWindows) {
+  return (rollingWindows || []).map((rw) => ({
+    startSec: rw.startSec,
+    avgWpm: rw.count > 0 ? Math.round(rw.totalWpm / rw.count) : 0,
+    avgAccuracy: rw.count > 0 ? Math.round(rw.totalAccuracy / rw.count) : 100,
+    count: rw.count,
+  }));
+}
+
 async function updateAnalyticsProfile(userId, score, accuracy, mistakes, analytics) {
   const pk = `USER#${userId}`;
   const sk = "ANALYTICS";
 
-  const existing = await ddb.send(new GetCommand({
-    TableName: TABLE,
-    Key: { pk, sk },
-  }));
+  const existing = await ddb.send(new GetCommand({ TableName: TABLE, Key: { pk, sk } }));
 
   const profile = existing.Item || {
-    pk,
-    sk,
-    totalTests: 0,
-    rollingKeyStats: {},
-    rollingBigramStats: {},
-    rollingBackspaceStats: {
-      totalBackspaces: 0, wordsWithBackspace: 0,
-      wordsRecovered: 0, wordsFailed: 0,
-      totalConsecutiveRuns: 0, totalConsecutiveLength: 0,
-    },
-    recentWpm: [],
-    recentAccuracy: [],
+    pk, sk, totalTests: 0,
+    rollingKeyStats: {}, rollingBigramStats: {},
+    rollingBackspaceStats: newBackspaceStats(),
+    recentWpm: [], recentAccuracy: [],
   };
 
   if (!profile.rollingBackspaceStats) {
-    profile.rollingBackspaceStats = {
-      totalBackspaces: 0, wordsWithBackspace: 0,
-      wordsRecovered: 0, wordsFailed: 0,
-      totalConsecutiveRuns: 0, totalConsecutiveLength: 0,
-    };
+    profile.rollingBackspaceStats = newBackspaceStats();
   }
 
   profile.totalTests += 1;
 
-  if (analytics.keyStats) {
-    for (const [key, stats] of Object.entries(analytics.keyStats)) {
-      if (!profile.rollingKeyStats[key]) {
-        profile.rollingKeyStats[key] = { correct: 0, errors: 0, totalLatencyMs: 0, count: 0 };
-      }
-      const r = profile.rollingKeyStats[key];
-      r.correct += stats.correct;
-      r.errors += stats.errors;
-      r.totalLatencyMs += stats.avgLatencyMs * (stats.correct + stats.errors);
-      r.count += stats.correct + stats.errors;
-    }
-  }
-
-  if (analytics.bigramStats) {
-    for (const bg of analytics.bigramStats) {
-      if (!profile.rollingBigramStats[bg.bigram]) {
-        profile.rollingBigramStats[bg.bigram] = { totalLatencyMs: 0, count: 0 };
-      }
-      const r = profile.rollingBigramStats[bg.bigram];
-      r.totalLatencyMs += bg.avgLatencyMs * bg.count;
-      r.count += bg.count;
-    }
-  }
-
-  if (analytics.backspaceStats) {
-    const bs = analytics.backspaceStats;
-    const r = profile.rollingBackspaceStats;
-    r.totalBackspaces += bs.totalBackspaces;
-    r.wordsWithBackspace += bs.wordsWithBackspace;
-    r.wordsRecovered += bs.wordsRecovered;
-    r.wordsFailed += bs.wordsFailed;
-    r.totalConsecutiveRuns += bs.consecutiveRuns;
-    r.totalConsecutiveLength += bs.totalConsecutiveLength;
-  }
+  if (analytics.keyStats) mergeKeyStats(profile.rollingKeyStats, analytics.keyStats);
+  if (analytics.bigramStats) mergeBigramStats(profile.rollingBigramStats, analytics.bigramStats);
+  if (analytics.backspaceStats) mergeBackspaceStats(profile.rollingBackspaceStats, analytics.backspaceStats);
+  if (analytics.windows?.length > 0) mergeWindows(profile, analytics.windows);
 
   profile.recentWpm = [...profile.recentWpm, score].slice(-RECENT_HISTORY_SIZE);
   profile.recentAccuracy = [...profile.recentAccuracy, accuracy ?? 100].slice(-RECENT_HISTORY_SIZE);
 
-  const weakestKeys = computeWeakestKeys(profile.rollingKeyStats);
-  const slowestBigrams = computeSlowestBigrams(profile.rollingBigramStats);
-  const fatigueArchetype = analytics.windows
-    ? classifyFatigueArchetype(analytics.windows)
-    : "unknown";
-  const wpmTrend = computeWpmTrend(profile.recentWpm);
-
-  profile.weakestKeys = weakestKeys;
-  profile.slowestBigrams = slowestBigrams;
-  profile.fatigueArchetype = fatigueArchetype;
-  profile.wpmTrend = wpmTrend;
-  profile.lastWindows = analytics.windows || [];
+  profile.weakestKeys = computeWeakestKeys(profile.rollingKeyStats);
+  profile.slowestBigrams = computeSlowestBigrams(profile.rollingBigramStats);
+  profile.fatigueArchetype = analytics.windows ? classifyFatigueArchetype(analytics.windows) : "unknown";
+  profile.wpmTrend = computeWpmTrend(profile.recentWpm);
+  profile.avgWindows = computeAvgWindows(profile.rollingWindows);
   profile.updatedAt = new Date().toISOString();
 
   await ddb.send(new PutCommand({ TableName: TABLE, Item: profile }));
@@ -512,7 +523,7 @@ async function handleGetAnalytics(event) {
       return response(200, { totalTests: 0 });
     }
 
-    const { pk, sk, ...profile } = result.Item;
+    const { pk, sk, rollingWindows, ...profile } = result.Item;
     return response(200, profile);
   } catch {
     return response(401, { message: "Not authorized" });

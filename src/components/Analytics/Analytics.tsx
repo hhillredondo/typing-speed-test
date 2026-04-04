@@ -386,12 +386,12 @@ const Analytics: React.FC = () => {
           <Card sx={{ height: "100%" }}>
             <CardContent>
               <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
-                Latest Test Pacing
+                Average Pacing
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
-                WPM per 10-second window
+                Average WPM per 10-second window across all tests
               </Typography>
-              <FatigueChart windows={profile.lastWindows || []} />
+              <FatigueChart windows={profile.avgWindows || []} />
             </CardContent>
           </Card>
         </Grid>

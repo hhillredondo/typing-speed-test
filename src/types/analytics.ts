@@ -60,6 +60,6 @@ export interface AnalyticsProfile {
   recentWpm: number[];
   recentAccuracy: number[];
   wpmTrend: number;
-  lastWindows: Array<{ startSec: number; wpm: number; accuracy: number; keystrokes: number }>;
+  avgWindows: Array<{ startSec: number; avgWpm: number; avgAccuracy: number; count: number }>;
   updatedAt: string;
 }
