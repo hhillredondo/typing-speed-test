@@ -88,7 +88,7 @@ Latencies above **5000 ms** between consecutive keys are ignored as invalid.
 
 For each distinct key (lowercased):
 
-- **`correct` / `errors`**: counts of presses where the character matched / did not match the expected character.
+- **`correct` / `errors`**: counts of presses where the character matched / did not match the expected character **at the moment of that press**. Every printable keypress is classified independently: if the user mistypes and then uses Backspace and retypes correctly, the wrong press still counts as an **error** for that key, and the later correct press counts as **correct**. Rolling **weakest keys** therefore reflect all mishits, not only words left wrong at submission.
 - **`avgLatencyMs`**: for that key, average time from the **previous keystroke in the same word** to this keystroke, across presses where that interval is valid (0 &lt; Δt &lt; 5000 ms). The first key of a word does not contribute a latency sample for this average in the same way (previous event may be on another word).
 
 So “average latency” here reflects **inter-key timing within a word**, keyed by the **pressed** character.
@@ -194,7 +194,7 @@ Updated **after each scored test** when `analytics` is present (`infra/lambda/ap
 | **`fatigueArchetype`** | See §5 (from **latest test’s** `windows` only). |
 | **`wpmTrend`** | See §6 (from `recentWpm`). |
 | **`rollingWindows`** (internal) | Per-window accumulators: `{ startSec, totalWpm, totalAccuracy, count }` for each of the 6 windows. Updated additively after each test. Not exposed to the frontend. |
-| **`avgWindows`** | Derived from `rollingWindows`: `{ startSec, avgWpm, avgAccuracy, count }`. Returned to the frontend for the "Average Pacing" chart. |
+| **`avgWindows`** | Derived from `rollingWindows`: `{ startSec, avgWpm, avgAccuracy, count }`. Returned to the frontend for the **Average Pacing** bar chart (`FatigueChart`). `GET /api/analytics` omits the raw `rollingWindows` accumulator (only `avgWindows` is sent). |
 | **`updatedAt`** | ISO timestamp. |
 
 ---
@@ -247,7 +247,7 @@ The Analytics UI shows an up / flat / down icon using thresholds **±0.5** on th
 
 ## 8. Weakness Drill (read-only)
 
-**`src/components/DrillMode/generateDrillWords.ts`** loads the same **`AnalyticsProfile`** and scores words from `en.json` by how many **weak keys** and **slowest bigrams** they contain. If there are no weak keys and no slowest bigrams in the profile, the word list is **fully random** (same pool as a normal test).
+**`src/components/DrillMode/generateDrillWords.ts`** loads the same **`AnalyticsProfile`** and scores words from `en.json` by how many **weak keys** and **slowest bigrams** they contain. If there are no weak keys and no slowest bigrams in the profile, the word list is **fully random** (same pool as a normal test). The pool is mostly high-frequency English words, with extra entries for less common letters (e.g. **z**, **j**) so drills and random tests can surface those keys more often.
 
 Drill sessions **do not** POST scores and **do not** change `ANALYTICS`.
 
