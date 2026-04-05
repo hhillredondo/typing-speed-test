@@ -1,8 +1,10 @@
-# Typing analytics (Phase 3A)
+# Typing analytics
 
 This document describes **what data the app collects**, **how it is turned into metrics**, and **how those metrics are stored and shown**. It matches the current implementation in the React client and the Lambda API.
 
 **Scope:** Analytics apply to **logged-in users** completing the **standard 60-second test** on the home screen (`src/components/Test/Test.tsx`). **Weakness Drill** sessions do **not** call the API and do **not** update analytics or leaderboards.
+
+Optional **AI-generated** coaching and practice text is documented separately: [AI coaching and practice passages](./ai-features.md).
 
 ---
 
@@ -243,93 +245,21 @@ The Analytics UI shows an up / flat / down icon using thresholds **±0.5** on th
 | Average pacing chart | `avgWindows` (derived from `rollingWindows`). |
 | WPM progress chart | `recentWpm` (line vs. test index). |
 
+The **AI Coach** card (when enabled) is documented in [AI coaching and practice passages](./ai-features.md).
+
 ---
 
-## 8. Weakness Drill
+## 8. Weakness Drill (word list)
 
 **`src/components/DrillMode/generateDrillWords.ts`** loads the same **`AnalyticsProfile`** and scores words from `en.json` by how many **weak keys** and **slowest bigrams** they contain. If there are no weak keys and no slowest bigrams in the profile, the word list is **fully random** (same pool as a normal test). The pool is mostly high-frequency English words, with extra entries for less common letters (e.g. **z**, **j**) so drills and random tests can surface those keys more often.
 
+The Drill screen also offers **AI Practice** (AI-generated paragraphs). That flow is described in [AI coaching and practice passages](./ai-features.md).
+
 Drill sessions **do not** POST scores and **do not** change `ANALYTICS`.
 
-### 8.1 AI Practice mode (Phase 3B)
-
-The Drill page has a **toggle** at the top: **Word Drill** (default) | **AI Practice**.
-
-When **AI Practice** is selected, the frontend calls **`POST /api/drill/passage`**. The backend:
-
-1. Loads the user's `ANALYTICS` item to read `weakestKeys` and `slowestBigrams`.
-2. Checks for a **cached passage** in DynamoDB (`pk = USER#<sub>`, `sk = PASSAGE#<weakness-hash>`). If a valid cached item exists (TTL not expired) and no refresh was requested, it returns it immediately.
-3. Otherwise, calls **Amazon Bedrock** (`ConverseCommand`) with a prompt asking for an 80–120 word paragraph that emphasizes the user's problem keys/bigrams.
-4. Caches the result in DynamoDB with a **24-hour TTL**.
-
-The passage is split into words and fed into the same typing mechanics as Word Drill. A **"New Passage"** button lets the user force-refresh.
-
 ---
 
-## 9. AI Coaching (Phase 3B)
-
-### 9.1 Notable session detection
-
-After each test, `updateAnalyticsProfile` calls `isNotableSession(profile, score)` which returns `true` if **any** of:
-
-- `totalTests` is divisible by **5** (milestone).
-- The new `score` is higher than all values in `recentWpm` before this test (new personal best).
-- More than **7 days** have passed since `lastCoachingAt`.
-
-When notable, `coachingStale` is set to `true` on the `ANALYTICS` item.
-
-### 9.2 Coaching endpoint (`GET /api/coaching`)
-
-1. Requires Bearer token; extracts `userId`.
-2. If `totalTests < 3`, returns `{ available: false, message: "..." }`.
-3. Loads cached coaching item (`pk = USER#<sub>`, `sk = COACH`).
-4. If cache exists, TTL not expired, **and** `coachingStale` is `false`, returns cached coaching.
-5. Otherwise, builds a coaching prompt from the analytics profile (average WPM, trend, accuracy, fatigue archetype, weakest keys, slowest bigrams) and calls **Bedrock** (`ConverseCommand`, max 300 tokens).
-6. Caches the result in DynamoDB with a **7-day TTL**.
-7. Sets `coachingStale = false` and `lastCoachingAt` on the `ANALYTICS` item.
-
-The response includes `{ available, summary, generatedAt, trigger }` where `trigger` is one of `new_pb`, `milestone`, or `periodic`.
-
-### 9.3 UI
-
-The **Analytics** page shows an **AI Coach** card (after the backspace analysis section) with:
-
-- The coaching summary text.
-- A chip showing the trigger type (New Personal Best / Milestone / Weekly Check-in).
-- A **Refresh** button to force-regenerate.
-- The date the coaching was generated.
-
-The card only appears when `totalTests >= 3`.
-
-### 9.4 Bedrock configuration
-
-| Setting | Value |
-|---------|-------|
-| Model | `BEDROCK_MODEL_ID` env var, default **`amazon.nova-micro-v1:0`** |
-| Temperature | 0.7 |
-| Max tokens (coaching) | 300 |
-| Max tokens (passage) | 400 |
-| CDK permission | `bedrock:InvokeModel` on `*` |
-
-### 9.5 DynamoDB caching
-
-| Item | `pk` | `sk` | `ttl` |
-|------|------|------|-------|
-| Coaching cache | `USER#<sub>` | `COACH` | 7 days from generation |
-| Passage cache | `USER#<sub>` | `PASSAGE#<weakness-hash>` | 24 hours from generation |
-
-DynamoDB TTL is enabled on the table via the `ttl` attribute (CDK: `timeToLiveAttribute: "ttl"`). Expired items are automatically deleted by DynamoDB.
-
-### 9.6 Cost controls
-
-- Coaching is only generated when `coachingStale` is set (notable sessions) or the cached item has expired. Not on every page visit.
-- Passages are cached by weakness profile hash; same weaknesses return the same cached passage until TTL expires or the user clicks "New Passage".
-- The cheapest available model is used by default (Nova Micro).
-- If Bedrock fails, the endpoint returns `{ available: false }` with a user-friendly message — no error propagation.
-
----
-
-## 10. Related files
+## 9. Related files
 
 | Area | Path |
 |------|------|
@@ -339,16 +269,16 @@ DynamoDB TTL is enabled on the table via the `ttl` attribute (CDK: `timeToLiveAt
 | API client | `src/state/scoreServices.ts` |
 | Analytics UI | `src/components/Analytics/*.tsx` |
 | Drill word list | `src/components/DrillMode/generateDrillWords.ts` |
-| Drill UI (words + AI passages) | `src/components/DrillMode/DrillMode.tsx` |
-| Backend | `infra/lambda/api/index.js` (`handleCreateScore`, `updateAnalyticsProfile`, `handleGetAnalytics`, `handleGetCoaching`, `handleGeneratePassage`, …) |
+| Drill UI | `src/components/DrillMode/DrillMode.tsx` |
+| Backend | `infra/lambda/api/index.js` (`handleCreateScore`, `updateAnalyticsProfile`, `handleGetAnalytics`, …) |
 | CDK | `infra/lib/typing-speed-stack.ts` |
 
 ---
 
-## 11. Design notes
+## 10. Design notes
 
 - **Privacy / payload size:** Raw keystroke logs stay in the browser; only **aggregates** are sent and stored.
-- **Cost:** Phase 3A uses no extra AWS services. Phase 3B adds **Amazon Bedrock** (on-demand, cheapest model) with aggressive caching.
+- **Cost (statistics):** Analytics aggregates use the existing DynamoDB table and Lambda; no additional managed analytics services are required for heatmaps and trends.
 - **Leaderboard:** Global scores still use **`score`** (words per minute count); optional `accuracy` on items is not required for sorting.
 
 If you change formulas (windows, bigram rules, thresholds), update this document and the tests together so the UI and docs stay aligned.

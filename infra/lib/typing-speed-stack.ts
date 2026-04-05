@@ -105,7 +105,8 @@ export class TypingSpeedStack extends Stack {
         ENV_NAME: envName,
         COGNITO_USER_POOL_ID: this.userPool.userPoolId,
         COGNITO_CLIENT_ID: this.userPoolClient.userPoolClientId,
-        BEDROCK_MODEL_ID: "amazon.nova-micro-v1:0",
+        // Optional: set to override inference profile (default is chosen from AWS_REGION in Lambda).
+        // BEDROCK_MODEL_ID: "eu.amazon.nova-micro-v1:0",
       },
     });
 

@@ -25,7 +25,19 @@ const crypto = require("crypto");
 const TABLE = process.env.TABLE_NAME;
 const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID;
 const CLIENT_ID = process.env.COGNITO_CLIENT_ID;
-const BEDROCK_MODEL_ID = process.env.BEDROCK_MODEL_ID || "amazon.nova-micro-v1:0";
+/**
+ * Nova Micro must be called via a regional inference profile ID in many regions
+ * (on-demand `amazon.nova-micro-v1:0` is rejected — see ValidationException in logs).
+ * Override with BEDROCK_MODEL_ID if you use a different model.
+ */
+function resolveBedrockModelId() {
+  if (process.env.BEDROCK_MODEL_ID) return process.env.BEDROCK_MODEL_ID;
+  const region = process.env.AWS_REGION || "";
+  if (region.startsWith("eu-")) return "eu.amazon.nova-micro-v1:0";
+  if (region.startsWith("us-")) return "us.amazon.nova-micro-v1:0";
+  if (region.startsWith("ap-")) return "apac.amazon.nova-micro-v1:0";
+  return "us.amazon.nova-micro-v1:0";
+}
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const cognito = new CognitoIdentityProviderClient({});
@@ -592,7 +604,7 @@ const PASSAGE_TTL_SECONDS = 24 * 60 * 60;
 
 async function callBedrock(prompt, maxTokens = 500) {
   const result = await bedrock.send(new ConverseCommand({
-    modelId: BEDROCK_MODEL_ID,
+    modelId: resolveBedrockModelId(),
     messages: [{ role: "user", content: [{ text: prompt }] }],
     inferenceConfig: { maxTokens, temperature: 0.7 },
   }));

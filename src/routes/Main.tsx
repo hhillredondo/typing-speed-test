@@ -94,9 +94,14 @@ const bgStyles = `
 .theme-light .blob-2 { background: radial-gradient(circle, #fde68a, #fbbf24); }
 .theme-light .blob-3 { background: radial-gradient(circle, #99f6e4, #5eead4); }
 
-.theme-dark .blob-1 { background: radial-gradient(circle, #4338ca, #6366f1); }
-.theme-dark .blob-2 { background: radial-gradient(circle, #7c3aed, #a855f7); }
-.theme-dark .blob-3 { background: radial-gradient(circle, #0e7490, #06b6d4); }
+/* Dark: same hue families as before, but desaturated and closer to the base — less neon contrast */
+.theme-dark .blob {
+  opacity: 0.34;
+  filter: blur(100px);
+}
+.theme-dark .blob-1 { background: radial-gradient(circle, #3d3a62, #2a2648); }
+.theme-dark .blob-2 { background: radial-gradient(circle, #4a3d58, #2e2438); }
+.theme-dark .blob-3 { background: radial-gradient(circle, #2a4a52, #1a2e34); }
 `;
 
 const Main: React.FC<{ view: string }> = (props) => {

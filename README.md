@@ -1,46 +1,73 @@
-# Getting Started with Create React App
+# Typing speed test
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A browser-based typing speed test with a global leaderboard, personal analytics, and optional AI-powered coaching. The frontend is a React (Create React App) application; the backend is a serverless API on AWS.
 
-## Available Scripts
+## Features
 
-In the project directory, you can run:
+- **Typing test** — Timed word test with accuracy and WPM-style scoring.
+- **Accounts** — Sign up and sign in via Amazon Cognito (email verification).
+- **Leaderboard** — Global scores stored in DynamoDB and queried through the API.
+- **Analytics** — Per-key and bigram statistics, pacing windows, trends, fatigue-style labels, backspace metrics, and a keyboard heatmap (logged-in users, data from completed tests).
+- **Weakness Drill** — Short practice sessions targeting weak keys and bigrams from word lists, plus optional **AI-generated practice passages** (Amazon Bedrock).
+- **AI Coach** — Short personalized summaries on the Analytics page (Bedrock), with server-side caching to limit cost.
 
-### `npm start`
+## Documentation
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+| Doc | Contents |
+|-----|----------|
+| [docs/README.md](docs/README.md) | Index of all documentation |
+| [docs/aws-architecture.md](docs/aws-architecture.md) | AWS components and diagrams |
+| [docs/analytics.md](docs/analytics.md) | How typing statistics are computed and stored |
+| [docs/ai-features.md](docs/ai-features.md) | AI coaching and AI practice passages |
+| [infra/README.md](infra/README.md) | CDK deploy commands and build-time environment variables |
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+## Local development
 
-### `npm test`
+Requirements: **Node.js** (LTS recommended), **npm**.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+```bash
+npm install
+npm start
+```
 
-### `npm run build`
+Opens the app at [http://localhost:3000](http://localhost:3000). For API calls (login, scores, analytics), configure the React app to point at a deployed backend (see environment variables below).
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+### Environment variables (frontend)
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+Copy [`.env.example`](.env.example) to **`.env.local`** (ignored by git) and fill in values, or set:
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+| Variable | Description |
+|----------|-------------|
+| `REACT_APP_API_URL` | Base URL of the HTTP API (no trailing slash required by all clients; match your deployment) |
+| `REACT_APP_COGNITO_USER_POOL_ID` | Cognito User Pool ID |
+| `REACT_APP_COGNITO_CLIENT_ID` | Cognito app client ID |
+| `REACT_APP_AWS_REGION` | AWS region (e.g. `eu-central-1`) |
 
-### `npm run eject`
+After changing `.env.local`, restart the dev server.
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+### Build
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+```bash
+npm run build
+```
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+Outputs a production bundle under `build/`, which you upload to the S3 bucket behind CloudFront (see `infra/README.md`).
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+### Tests
 
-## Learn More
+```bash
+npm test
+```
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+## Tech stack
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+- **UI:** React, TypeScript, Material UI
+- **API:** AWS Lambda (Node.js), API Gateway HTTP API
+- **Data:** DynamoDB (single-table design)
+- **Auth:** Amazon Cognito
+- **Hosting:** S3 + CloudFront
+- **AI (optional):** Amazon Bedrock (Nova Micro via regional inference profiles)
+
+## License
+
+Specify your license in a `LICENSE` file at the repository root. This README does not impose a license by default.
