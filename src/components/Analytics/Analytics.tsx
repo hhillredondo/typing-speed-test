@@ -118,7 +118,7 @@ const BackspaceSection: React.FC<{
   return (
     <Grid container spacing={1}>
       {items.map((item) => (
-        <Grid item xs={6} sm={4} key={item.label}>
+        <Grid size={{ xs: 6, sm: 4 }} key={item.label}>
           <Box sx={{ textAlign: "center", py: 0.5 }}>
             <Typography variant="h5" fontWeight="bold">
               {item.value}
@@ -305,7 +305,7 @@ const Analytics: React.FC = () => {
       </Typography>
 
       <Grid container spacing={2} sx={{ mb: 2 }}>
-        <Grid item xs={4}>
+        <Grid size={4}>
           <Card>
             <CardContent sx={{ textAlign: "center", py: 2, "&:last-child": { pb: 2 } }}>
               <Typography variant="h4" fontWeight="bold">
@@ -317,7 +317,7 @@ const Analytics: React.FC = () => {
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={4}>
+        <Grid size={4}>
           <Card>
             <CardContent sx={{ textAlign: "center", py: 2, "&:last-child": { pb: 2 } }}>
               <Stack direction="row" justifyContent="center" alignItems="center" gap={0.5}>
@@ -332,7 +332,7 @@ const Analytics: React.FC = () => {
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={4}>
+        <Grid size={4}>
           <Card>
             <CardContent sx={{ textAlign: "center", py: 2, "&:last-child": { pb: 2 } }}>
               <Typography variant="h4" fontWeight="bold">
@@ -391,7 +391,7 @@ const Analytics: React.FC = () => {
       </Card>
 
       <Grid container spacing={2} sx={{ mb: 2 }}>
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Card sx={{ height: "100%" }}>
             <CardContent>
               <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
@@ -425,7 +425,7 @@ const Analytics: React.FC = () => {
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Card sx={{ height: "100%" }}>
             <CardContent>
               <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
@@ -480,7 +480,7 @@ const Analytics: React.FC = () => {
       <CoachingCard totalTests={profile.totalTests} />
 
       <Grid container spacing={2}>
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Card sx={{ height: "100%" }}>
             <CardContent>
               <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
@@ -493,7 +493,7 @@ const Analytics: React.FC = () => {
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Card sx={{ height: "100%" }}>
             <CardContent>
               <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
