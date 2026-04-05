@@ -16,14 +16,20 @@ const {
   AdminGetUserCommand,
   AdminDeleteUserCommand,
 } = require("@aws-sdk/client-cognito-identity-provider");
+const {
+  BedrockRuntimeClient,
+  ConverseCommand,
+} = require("@aws-sdk/client-bedrock-runtime");
 const crypto = require("crypto");
 
 const TABLE = process.env.TABLE_NAME;
 const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID;
 const CLIENT_ID = process.env.COGNITO_CLIENT_ID;
+const BEDROCK_MODEL_ID = process.env.BEDROCK_MODEL_ID || "amazon.nova-micro-v1:0";
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const cognito = new CognitoIdentityProviderClient({});
+const bedrock = new BedrockRuntimeClient({});
 
 const headers = {
   "Content-Type": "application/json",
@@ -445,7 +451,20 @@ async function updateAnalyticsProfile(userId, score, accuracy, mistakes, analyti
   profile.avgWindows = computeAvgWindows(profile.rollingWindows);
   profile.updatedAt = new Date().toISOString();
 
+  if (isNotableSession(profile, score)) {
+    profile.coachingStale = true;
+  }
+
   await ddb.send(new PutCommand({ TableName: TABLE, Item: profile }));
+}
+
+function isNotableSession(profile, score) {
+  if (profile.totalTests % 5 === 0) return true;
+  const previous = profile.recentWpm.slice(0, -1);
+  if (previous.length > 0 && score > Math.max(...previous)) return true;
+  const lastCoaching = profile.lastCoachingAt ? new Date(profile.lastCoachingAt).getTime() : 0;
+  if (Date.now() - lastCoaching > 7 * 24 * 60 * 60 * 1000) return true;
+  return false;
 }
 
 function computeWeakestKeys(rollingKeyStats) {
@@ -566,6 +585,211 @@ async function handleGetAnalyticsHistory(event) {
   }
 }
 
+// ── Bedrock AI ──
+
+const COACHING_TTL_SECONDS = 7 * 24 * 60 * 60;
+const PASSAGE_TTL_SECONDS = 24 * 60 * 60;
+
+async function callBedrock(prompt, maxTokens = 500) {
+  const result = await bedrock.send(new ConverseCommand({
+    modelId: BEDROCK_MODEL_ID,
+    messages: [{ role: "user", content: [{ text: prompt }] }],
+    inferenceConfig: { maxTokens, temperature: 0.7 },
+  }));
+  return result.output.message.content[0].text;
+}
+
+function buildCoachingPrompt(profile) {
+  const avgWpm = profile.recentWpm.length > 0
+    ? Math.round(profile.recentWpm.reduce((a, b) => a + b, 0) / profile.recentWpm.length)
+    : 0;
+  const avgAcc = profile.recentAccuracy.length > 0
+    ? Math.round(profile.recentAccuracy.reduce((a, b) => a + b, 0) / profile.recentAccuracy.length)
+    : 100;
+  const weakKeys = (profile.weakestKeys || [])
+    .slice(0, 5)
+    .map((k) => `${k.key} (${Math.round(k.errorRate * 100)}% error rate)`)
+    .join(", ");
+  const slowBigrams = (profile.slowestBigrams || [])
+    .slice(0, 5)
+    .map((b) => `"${b.bigram}" (${b.avgLatencyMs}ms)`)
+    .join(", ");
+
+  return [
+    "You are a typing coach. Analyze this user's typing data and give a brief, encouraging coaching summary (3-5 sentences).",
+    "",
+    `Tests completed: ${profile.totalTests}`,
+    `Average WPM: ${avgWpm}`,
+    `WPM trend: ${profile.wpmTrend > 0 ? "+" : ""}${profile.wpmTrend} per test (positive = improving)`,
+    `Average accuracy: ${avgAcc}%`,
+    `Fatigue pattern: ${profile.fatigueArchetype}`,
+    weakKeys ? `Weakest keys: ${weakKeys}` : "No significant weak keys yet.",
+    slowBigrams ? `Slowest key combinations: ${slowBigrams}` : "No significant slow bigrams yet.",
+    "",
+    "Give actionable, personalized advice. Be encouraging but specific. Focus on 1-2 key areas for improvement. Do not use bullet points or lists — write in flowing prose.",
+  ].join("\n");
+}
+
+function buildPassagePrompt(profile) {
+  const weakKeys = (profile.weakestKeys || []).slice(0, 5).map((k) => k.key);
+  const slowBigrams = (profile.slowestBigrams || []).slice(0, 5).map((b) => b.bigram);
+
+  const constraints = [];
+  if (weakKeys.length > 0) {
+    constraints.push(`Include many words containing these letters: ${weakKeys.join(", ")}`);
+  }
+  if (slowBigrams.length > 0) {
+    constraints.push(`Include words containing these letter combinations: ${slowBigrams.join(", ")}`);
+  }
+  if (constraints.length === 0) {
+    constraints.push("Use a good mix of common English words.");
+  }
+
+  return [
+    "Generate a natural-sounding paragraph of 80-120 words for typing practice.",
+    ...constraints,
+    "Keep sentences coherent and readable. Use common words — avoid jargon or very long words.",
+    "Output ONLY the paragraph text, nothing else.",
+  ].join("\n");
+}
+
+async function handleGetCoaching(event) {
+  const authHeader = event.headers?.authorization || "";
+  if (!authHeader.startsWith("Bearer ")) {
+    return response(401, { message: "Not authorized, no token" });
+  }
+
+  let userId;
+  try {
+    userId = decodeJwtPayload(authHeader.split(" ")[1]).sub;
+  } catch {
+    return response(401, { message: "Not authorized" });
+  }
+
+  const pk = `USER#${userId}`;
+  const profileResult = await ddb.send(new GetCommand({ TableName: TABLE, Key: { pk, sk: "ANALYTICS" } }));
+  const profile = profileResult.Item;
+
+  if (!profile || profile.totalTests < 3) {
+    return response(200, { available: false, message: "Complete at least 3 tests to unlock AI coaching." });
+  }
+
+  const nowEpoch = Math.floor(Date.now() / 1000);
+  const cacheResult = await ddb.send(new GetCommand({ TableName: TABLE, Key: { pk, sk: "COACH" } }));
+  const cached = cacheResult.Item;
+
+  if (cached && cached.ttl > nowEpoch && !profile.coachingStale) {
+    return response(200, {
+      available: true,
+      summary: cached.summary,
+      generatedAt: cached.generatedAt,
+      trigger: cached.trigger,
+    });
+  }
+
+  try {
+    const prompt = buildCoachingPrompt(profile);
+    const summary = await callBedrock(prompt, 300);
+    const generatedAt = new Date().toISOString();
+    const trigger = determineTrigger(profile);
+
+    await ddb.send(new PutCommand({
+      TableName: TABLE,
+      Item: {
+        pk, sk: "COACH",
+        summary, generatedAt, trigger,
+        ttl: nowEpoch + COACHING_TTL_SECONDS,
+      },
+    }));
+
+    await ddb.send(new UpdateCommand({
+      TableName: TABLE,
+      Key: { pk, sk: "ANALYTICS" },
+      UpdateExpression: "SET coachingStale = :f, lastCoachingAt = :now",
+      ExpressionAttributeValues: { ":f": false, ":now": generatedAt },
+    }));
+
+    return response(200, { available: true, summary, generatedAt, trigger });
+  } catch (err) {
+    console.error("Bedrock coaching call failed:", err);
+    return response(200, {
+      available: false,
+      message: "AI coaching is temporarily unavailable. Please try again later.",
+    });
+  }
+}
+
+function determineTrigger(profile) {
+  const previous = profile.recentWpm.slice(0, -1);
+  const latest = profile.recentWpm[profile.recentWpm.length - 1];
+  if (previous.length > 0 && latest > Math.max(...previous)) return "new_pb";
+  if (profile.totalTests % 5 === 0) return "milestone";
+  return "periodic";
+}
+
+async function handleGeneratePassage(event) {
+  const authHeader = event.headers?.authorization || "";
+  if (!authHeader.startsWith("Bearer ")) {
+    return response(401, { message: "Not authorized, no token" });
+  }
+
+  let userId;
+  try {
+    userId = decodeJwtPayload(authHeader.split(" ")[1]).sub;
+  } catch {
+    return response(401, { message: "Not authorized" });
+  }
+
+  const pk = `USER#${userId}`;
+  const profileResult = await ddb.send(new GetCommand({ TableName: TABLE, Key: { pk, sk: "ANALYTICS" } }));
+  const profile = profileResult.Item;
+
+  if (!profile || profile.totalTests < 1) {
+    return response(200, {
+      available: false,
+      message: "Complete at least one test to unlock AI practice passages.",
+    });
+  }
+
+  const weakKeys = (profile.weakestKeys || []).slice(0, 5).map((k) => k.key).sort().join(",");
+  const slowBigrams = (profile.slowestBigrams || []).slice(0, 5).map((b) => b.bigram).sort().join(",");
+  const cacheKey = `PASSAGE#${weakKeys}|${slowBigrams}`;
+
+  const nowEpoch = Math.floor(Date.now() / 1000);
+  const cacheResult = await ddb.send(new GetCommand({ TableName: TABLE, Key: { pk, sk: cacheKey } }));
+  const cached = cacheResult.Item;
+
+  const body = parseBody(event);
+  const forceRefresh = body.refresh === true;
+
+  if (cached && cached.ttl > nowEpoch && !forceRefresh) {
+    return response(200, { available: true, passage: cached.passage, generatedAt: cached.generatedAt });
+  }
+
+  try {
+    const prompt = buildPassagePrompt(profile);
+    const passage = await callBedrock(prompt, 400);
+    const generatedAt = new Date().toISOString();
+
+    await ddb.send(new PutCommand({
+      TableName: TABLE,
+      Item: {
+        pk, sk: cacheKey,
+        passage, generatedAt,
+        ttl: nowEpoch + PASSAGE_TTL_SECONDS,
+      },
+    }));
+
+    return response(200, { available: true, passage, generatedAt });
+  } catch (err) {
+    console.error("Bedrock passage call failed:", err);
+    return response(200, {
+      available: false,
+      message: "AI passage generation is temporarily unavailable. Please try again later.",
+    });
+  }
+}
+
 // ── Router ──
 
 exports.handler = async (event) => {
@@ -595,6 +819,8 @@ exports.handler = async (event) => {
     if (path === "/api/scores" && method === "GET") return await handleGetScores();
     if (path === "/api/analytics" && method === "GET") return await handleGetAnalytics(event);
     if (path === "/api/analytics/history" && method === "GET") return await handleGetAnalyticsHistory(event);
+    if (path === "/api/coaching" && method === "GET") return await handleGetCoaching(event);
+    if (path === "/api/drill/passage" && method === "POST") return await handleGeneratePassage(event);
     if (path === "/health" || path === "/api/health") {
       return response(200, { ok: true, env: process.env.ENV_NAME || "unknown" });
     }

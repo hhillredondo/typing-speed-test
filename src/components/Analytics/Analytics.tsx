@@ -1,5 +1,6 @@
 import {
   Box,
+  Button,
   Card,
   CardContent,
   Chip,
@@ -8,15 +9,17 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import BackspaceIcon from "@mui/icons-material/Backspace";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import SpeedIcon from "@mui/icons-material/Speed";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import TrendingFlatIcon from "@mui/icons-material/TrendingFlat";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { isUserLoggedIn } from "../../core/isUserLoggedIn";
-import { getAnalyticsProfile } from "../../state/scoreServices";
-import type { AnalyticsProfile, RollingBackspaceStats } from "../../types/analytics";
+import { getAnalyticsProfile, getCoaching } from "../../state/scoreServices";
+import type { AnalyticsProfile, CoachingResponse, RollingBackspaceStats } from "../../types/analytics";
 import KeyboardHeatmap from "./KeyboardHeatmap";
 import FatigueChart from "./FatigueChart";
 import ProgressChart from "./ProgressChart";
@@ -127,6 +130,91 @@ const BackspaceSection: React.FC<{
         </Grid>
       ))}
     </Grid>
+  );
+};
+
+const TRIGGER_LABELS: Record<string, string> = {
+  new_pb: "New Personal Best",
+  milestone: "Milestone",
+  periodic: "Weekly Check-in",
+};
+
+const CoachingCard: React.FC<{ totalTests: number }> = ({ totalTests }) => {
+  const [coaching, setCoaching] = useState<CoachingResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+
+  const fetchCoaching = useCallback(() => {
+    if (totalTests < 3) return;
+    setLoading(true);
+    setError(false);
+    getCoaching()
+      .then(setCoaching)
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  }, [totalTests]);
+
+  useEffect(() => {
+    fetchCoaching();
+  }, [fetchCoaching]);
+
+  if (totalTests < 3) return null;
+
+  return (
+    <Card sx={{ mb: 2 }}>
+      <CardContent>
+        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
+          <AutoAwesomeIcon color="warning" />
+          <Typography variant="h6" fontWeight="bold">
+            AI Coach
+          </Typography>
+          {coaching?.trigger && (
+            <Chip
+              label={TRIGGER_LABELS[coaching.trigger] || coaching.trigger}
+              size="small"
+              color="warning"
+              variant="outlined"
+            />
+          )}
+          <Box sx={{ flex: 1 }} />
+          <Button
+            size="small"
+            startIcon={<RefreshIcon />}
+            onClick={fetchCoaching}
+            disabled={loading}
+          >
+            Refresh
+          </Button>
+        </Stack>
+        {loading && (
+          <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
+            <CircularProgress size={28} />
+          </Box>
+        )}
+        {!loading && error && (
+          <Typography variant="body2" color="text.secondary">
+            Could not load coaching. Try again later.
+          </Typography>
+        )}
+        {!loading && !error && coaching?.available && coaching.summary && (
+          <>
+            <Typography variant="body1" sx={{ lineHeight: 1.7 }}>
+              {coaching.summary}
+            </Typography>
+            {coaching.generatedAt && (
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+                Generated {new Date(coaching.generatedAt).toLocaleDateString()}
+              </Typography>
+            )}
+          </>
+        )}
+        {!loading && !error && coaching && !coaching.available && (
+          <Typography variant="body2" color="text.secondary">
+            {coaching.message}
+          </Typography>
+        )}
+      </CardContent>
+    </Card>
   );
 };
 
@@ -388,6 +476,8 @@ const Analytics: React.FC = () => {
           </CardContent>
         </Card>
       )}
+
+      <CoachingCard totalTests={profile.totalTests} />
 
       <Grid container spacing={2}>
         <Grid item xs={12} md={6}>

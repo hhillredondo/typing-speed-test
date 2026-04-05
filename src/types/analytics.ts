@@ -61,5 +61,22 @@ export interface AnalyticsProfile {
   recentAccuracy: number[];
   wpmTrend: number;
   avgWindows: Array<{ startSec: number; avgWpm: number; avgAccuracy: number; count: number }>;
+  coachingStale?: boolean;
+  lastCoachingAt?: string;
   updatedAt: string;
+}
+
+export interface CoachingResponse {
+  available: boolean;
+  summary?: string;
+  generatedAt?: string;
+  trigger?: "new_pb" | "milestone" | "periodic";
+  message?: string;
+}
+
+export interface PassageResponse {
+  available: boolean;
+  passage?: string;
+  generatedAt?: string;
+  message?: string;
 }

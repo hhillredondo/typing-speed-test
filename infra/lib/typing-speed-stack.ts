@@ -45,6 +45,7 @@ export class TypingSpeedStack extends Stack {
       pointInTimeRecoverySpecification: {
         pointInTimeRecoveryEnabled: envName === "prod",
       },
+      timeToLiveAttribute: "ttl",
     });
 
     this.table.addGlobalSecondaryIndex({
@@ -104,6 +105,7 @@ export class TypingSpeedStack extends Stack {
         ENV_NAME: envName,
         COGNITO_USER_POOL_ID: this.userPool.userPoolId,
         COGNITO_CLIENT_ID: this.userPoolClient.userPoolClientId,
+        BEDROCK_MODEL_ID: "amazon.nova-micro-v1:0",
       },
     });
 
@@ -121,6 +123,14 @@ export class TypingSpeedStack extends Stack {
           "cognito-idp:AdminDeleteUser",
         ],
         resources: [this.userPool.userPoolArn],
+      })
+    );
+
+    apiFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ["bedrock:InvokeModel"],
+        resources: ["*"],
       })
     );
 

@@ -11,11 +11,14 @@ import {
   DialogTitle,
   Stack,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { isUserLoggedIn } from "../../core/isUserLoggedIn";
-import { getAnalyticsProfile } from "../../state/scoreServices";
+import { generateDrillPassage, getAnalyticsProfile } from "../../state/scoreServices";
 import type { AnalyticsProfile } from "../../types/analytics";
 import Timer from "../Test/components/Timer";
 import { generateDrillWords } from "./generateDrillWords";
@@ -31,6 +34,10 @@ const cursorKeyframes = `
 const DrillMode: React.FC = () => {
   const [profile, setProfile] = useState<AnalyticsProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [drillMode, setDrillMode] = useState<"words" | "passage">("words");
+  const [passageText, setPassageText] = useState<string | null>(null);
+  const [passageLoading, setPassageLoading] = useState(false);
+  const [passageError, setPassageError] = useState<string | null>(null);
   const loggedIn = isUserLoggedIn();
 
   const [words, setWords] = useState<string[]>([]);
@@ -66,6 +73,25 @@ const DrillMode: React.FC = () => {
   useEffect(() => {
     totalKeysRef.current = totalKeys;
   }, [totalKeys]);
+
+  const fetchPassage = useCallback((refresh = false) => {
+    setPassageLoading(true);
+    setPassageError(null);
+    generateDrillPassage(refresh)
+      .then((res) => {
+        if (res.available && res.passage) {
+          setPassageText(res.passage);
+          const passageWords = res.passage.split(/\s+/).filter((w: string) => w.length > 0);
+          setWords(passageWords);
+          setWordIndex(0);
+          setTyped("");
+        } else {
+          setPassageError(res.message || "Could not generate passage.");
+        }
+      })
+      .catch(() => setPassageError("Failed to generate passage. Try again."))
+      .finally(() => setPassageLoading(false));
+  }, []);
 
   useEffect(() => {
     if (!loggedIn) {
@@ -109,7 +135,10 @@ const DrillMode: React.FC = () => {
   }, [timer, testRunning, finishTest]);
 
   const resetDrill = () => {
-    if (profile && profile.totalTests > 0) {
+    if (drillMode === "passage" && passageText) {
+      const passageWords = passageText.split(/\s+/).filter((w) => w.length > 0);
+      setWords(passageWords);
+    } else if (profile && profile.totalTests > 0) {
       setWords(generateDrillWords(profile));
     }
     setWordIndex(0);
@@ -248,38 +277,117 @@ const DrillMode: React.FC = () => {
   const targetingKeys = (profile.weakestKeys || []).slice(0, 3);
   const targetingBigrams = (profile.slowestBigrams || []).slice(0, 3);
 
+  const handleModeChange = (_: React.MouseEvent<HTMLElement>, newMode: "words" | "passage" | null) => {
+    if (!newMode || newMode === drillMode || testRunning) return;
+    setDrillMode(newMode);
+    setWordIndex(0);
+    setTyped("");
+    setScore(0);
+    setMistakes(0);
+    setCorrectKeys(0);
+    setTotalKeys(0);
+    setTimer(DRILL_DURATION);
+    setTestRunning(false);
+
+    if (newMode === "words" && profile && profile.totalTests > 0) {
+      setWords(generateDrillWords(profile));
+    } else if (newMode === "passage") {
+      if (passageText) {
+        setWords(passageText.split(/\s+/).filter((w) => w.length > 0));
+      } else {
+        fetchPassage();
+      }
+    }
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
+
   return (
     <>
       <style>{cursorKeyframes}</style>
       <Box sx={{ width: "100%", maxWidth: 800, px: { xs: 2, sm: 3 } }}>
         {!testRunning && timer === DRILL_DURATION && (
-          <Card sx={{ mb: 3 }}>
-            <CardContent sx={{ py: 1.5, "&:last-child": { pb: 1.5 } }}>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap", gap: 1 }}>
-                <Typography variant="body2" fontWeight="bold">
-                  Targeting:
-                </Typography>
-                {targetingKeys.map((k) => (
-                  <Chip
-                    key={k.key}
-                    label={k.key.toUpperCase()}
-                    size="small"
-                    color="error"
-                    variant="outlined"
-                  />
-                ))}
-                {targetingBigrams.map((bg) => (
-                  <Chip
-                    key={bg.bigram}
-                    label={`"${bg.bigram}"`}
-                    size="small"
-                    color="warning"
-                    variant="outlined"
-                  />
-                ))}
-              </Stack>
-            </CardContent>
-          </Card>
+          <>
+            <Stack alignItems="center" sx={{ mb: 2 }}>
+              <ToggleButtonGroup
+                value={drillMode}
+                exclusive
+                onChange={handleModeChange}
+                size="small"
+              >
+                <ToggleButton value="words">Word Drill</ToggleButton>
+                <ToggleButton value="passage">
+                  <AutoAwesomeIcon sx={{ fontSize: 16, mr: 0.5 }} />
+                  AI Practice
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Stack>
+
+            {drillMode === "words" && (
+              <Card sx={{ mb: 3 }}>
+                <CardContent sx={{ py: 1.5, "&:last-child": { pb: 1.5 } }}>
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap", gap: 1 }}>
+                    <Typography variant="body2" fontWeight="bold">
+                      Targeting:
+                    </Typography>
+                    {targetingKeys.map((k) => (
+                      <Chip
+                        key={k.key}
+                        label={k.key.toUpperCase()}
+                        size="small"
+                        color="error"
+                        variant="outlined"
+                      />
+                    ))}
+                    {targetingBigrams.map((bg) => (
+                      <Chip
+                        key={bg.bigram}
+                        label={`"${bg.bigram}"`}
+                        size="small"
+                        color="warning"
+                        variant="outlined"
+                      />
+                    ))}
+                  </Stack>
+                </CardContent>
+              </Card>
+            )}
+
+            {drillMode === "passage" && passageLoading && (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+                <CircularProgress size={28} />
+              </Box>
+            )}
+
+            {drillMode === "passage" && !passageLoading && passageError && (
+              <Card sx={{ mb: 3 }}>
+                <CardContent sx={{ textAlign: "center" }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    {passageError}
+                  </Typography>
+                  <Button size="small" variant="outlined" onClick={() => fetchPassage(true)}>
+                    Retry
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {drillMode === "passage" && !passageLoading && !passageError && passageText && (
+              <Card sx={{ mb: 3 }}>
+                <CardContent sx={{ py: 1.5, "&:last-child": { pb: 1.5 } }}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <AutoAwesomeIcon sx={{ fontSize: 16 }} color="warning" />
+                    <Typography variant="body2" fontWeight="bold">
+                      AI-generated practice passage
+                    </Typography>
+                    <Box sx={{ flex: 1 }} />
+                    <Button size="small" onClick={() => fetchPassage(true)} disabled={passageLoading}>
+                      New Passage
+                    </Button>
+                  </Stack>
+                </CardContent>
+              </Card>
+            )}
+          </>
         )}
 
         <Stack direction="column" spacing={3} alignItems="center">
