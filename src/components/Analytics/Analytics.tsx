@@ -90,16 +90,24 @@ const BackspaceSection: React.FC<{
     stats.totalConsecutiveRuns > 0
       ? (stats.totalConsecutiveLength / stats.totalConsecutiveRuns).toFixed(1)
       : "0";
+  const submittedWithBs = stats.wordsRecovered + stats.wordsFailed;
+  // Recovery is only defined for *submitted* words that used backspace. `wordsWithBackspace`
+  // also counts words you were still editing when the timer ran out (no WordEvent), which
+  // would wrongly lower the % if we divided by it.
   const recoveryRate =
-    stats.wordsWithBackspace > 0
-      ? Math.round((stats.wordsRecovered / stats.wordsWithBackspace) * 100)
-      : 0;
+    submittedWithBs > 0
+      ? Math.round((stats.wordsRecovered / submittedWithBs) * 100)
+      : null;
 
   const items = [
     { label: "Avg backspaces / test", value: avgPerTest },
     { label: "Words recovered with backspace", value: String(stats.wordsRecovered) },
     { label: "Words still wrong despite backspace", value: String(stats.wordsFailed) },
-    { label: "Recovery rate", value: `${recoveryRate}%` },
+    {
+      label: "Recovery rate",
+      value:
+        recoveryRate === null ? "—" : `${recoveryRate}%`,
+    },
     { label: "Consecutive backspace bursts", value: String(stats.totalConsecutiveRuns) },
     { label: "Avg consecutive backspaces / burst", value: avgConsecutive },
   ];

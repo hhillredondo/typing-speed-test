@@ -239,7 +239,7 @@ The Analytics UI shows an up / flat / down icon using thresholds **±0.5** on th
 | Keyboard heatmap | `rollingKeyStats`: color by **error rate** per key; tooltip shows error %, total presses, rolling avg latency. |
 | Weakest keys table | `weakestKeys` from API. |
 | Slowest bigrams table | `slowestBigrams` from API. |
-| Backspace analysis | `rollingBackspaceStats` + `totalTests`: avg backspaces/test, words recovered, words failed, recovery rate, burst count, avg burst length. |
+| Backspace analysis | `rollingBackspaceStats` + `totalTests`: avg backspaces/test, words recovered, words failed, recovery rate, burst count, avg burst length. **Recovery rate** = `wordsRecovered / (wordsRecovered + wordsFailed)` when that sum &gt; 0 (share of *submitted* words that used backspace and were typed correctly). It is **not** `wordsRecovered / wordsWithBackspace`, because `wordsWithBackspace` includes words you were still fixing when the timer ended (no submission), which would otherwise depress the percentage even when every submitted word was recovered. |
 | Average pacing chart | `avgWindows` (derived from `rollingWindows`). |
 | WPM progress chart | `recentWpm` (line vs. test index). |
 
