@@ -3,6 +3,7 @@ import * as cdk from "aws-cdk-lib";
 import { CfnOutput, Duration, RemovalPolicy, Stack, StackProps } from "aws-cdk-lib";
 import * as apigwv2 from "aws-cdk-lib/aws-apigatewayv2";
 import * as apigwIntegrations from "aws-cdk-lib/aws-apigatewayv2-integrations";
+import * as budgets from "aws-cdk-lib/aws-budgets";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as cognito from "aws-cdk-lib/aws-cognito";
@@ -12,10 +13,11 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import { Construct } from "constructs";
+import { GitHubActionsRole } from "./github-actions-role";
 
 export interface TypingSpeedStackProps extends StackProps {
   /** Logical environment name — used in resource names and tags. */
-  envName: "dev" | "prod";
+  envName: "dev";
 }
 
 export class TypingSpeedStack extends Stack {
@@ -42,9 +44,6 @@ export class TypingSpeedStack extends Stack {
       sortKey: { name: "sk", type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: RemovalPolicy.DESTROY,
-      pointInTimeRecoverySpecification: {
-        pointInTimeRecoveryEnabled: envName === "prod",
-      },
       timeToLiveAttribute: "ttl",
     });
 
@@ -86,15 +85,14 @@ export class TypingSpeedStack extends Stack {
     const apiLambdaPath = path.join(__dirname, "..", "lambda", "api");
 
     const apiLogGroup = new logs.LogGroup(this, "ApiLogGroup", {
-      retention:
-        envName === "prod" ? logs.RetentionDays.TWO_WEEKS : logs.RetentionDays.ONE_WEEK,
+      retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: RemovalPolicy.DESTROY,
     });
 
     const apiFunction = new lambda.Function(this, "ApiFunction", {
       functionName: `${prefix}-api`,
       description: `Typing speed REST API (${envName})`,
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       handler: "index.handler",
       code: lambda.Code.fromAsset(apiLambdaPath),
       timeout: Duration.seconds(29),
@@ -202,6 +200,37 @@ export class TypingSpeedStack extends Stack {
           responseHttpStatus: 200,
           responsePagePath: "/index.html",
           ttl: Duration.minutes(5),
+        },
+      ],
+    });
+
+    // --- GitHub Actions deploy role (OIDC) ---
+    new GitHubActionsRole(this, "GitHubActionsDeployRole", {
+      repo: "AlphaAnimal/typing-speed-test",
+      siteBucket: this.siteBucket,
+      distribution: this.distribution,
+    });
+
+    // --- Bedrock spend alert ---
+    new budgets.CfnBudget(this, "BedrockBudget", {
+      budget: {
+        budgetName: `${prefix}-bedrock-monthly`,
+        budgetType: "COST",
+        timeUnit: "MONTHLY",
+        budgetLimit: { amount: 5, unit: "USD" },
+        costFilters: { Service: ["Amazon Bedrock"] },
+      },
+      notificationsWithSubscribers: [
+        {
+          notification: {
+            notificationType: "ACTUAL",
+            comparisonOperator: "GREATER_THAN",
+            threshold: 100,
+            thresholdType: "PERCENTAGE",
+          },
+          subscribers: [
+            { subscriptionType: "EMAIL", address: "h.h.redondo@gmail.com" },
+          ],
         },
       ],
     });

@@ -17,10 +17,20 @@
     "react-scripts": "5.0.1",
     "typescript": "^5.9.3"
   },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "@types/jest": "^29.5.12",
+    "serve": "^14.2.4"
+  },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
+    "test:ci": "react-scripts test --watchAll=false",
+    "test:e2e": "playwright test",
+    "test:e2e:remote": "E2E_BASE_URL=https://d1cm3vgninwgq8.cloudfront.net playwright test",
+    "health-check": "node scripts/health-check.js",
+    "typecheck": "tsc --noEmit",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {

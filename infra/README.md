@@ -1,23 +1,20 @@
 # AWS CDK infrastructure
 
-This folder defines **AWS CDK** stacks for the typing speed application. Each stack provisions a full environment: Cognito, DynamoDB, Lambda API, HTTP API, S3 bucket, and CloudFront distribution.
+This folder defines the **AWS CDK** stack for the typing speed application. The stack provisions a full environment: Cognito, DynamoDB, Lambda API, HTTP API, S3 bucket, and CloudFront distribution.
 
 For **architecture diagrams** and component overview, see **[../docs/aws-architecture.md](../docs/aws-architecture.md)**.
 
-## Stacks
+## Stack
 
 | Stack name | Purpose |
 |------------|---------|
-| `typing-speed-dev` | Development / staging |
-| `typing-speed-prod` | Production |
+| `typing-speed-dev` | Single environment |
 
-Each environment has its **own** Cognito user pool, API, table, and static site bucket. User accounts and data are **not** shared between stacks.
-
-## What each stack creates
+## What the stack creates
 
 - **Amazon Cognito** User Pool and app client (no client secret; SRP + `USER_PASSWORD` for the SPA)
-- **DynamoDB** table `typing-speed-<env>-app` (`pk` + `sk`, on-demand billing; optional point-in-time recovery on prod)
-- **AWS Lambda** (`typing-speed-<env>-api`) — Node.js handler in `lambda/api/` (REST-style routes for users, scores, analytics, health, and optional Bedrock-backed AI routes)
+- **DynamoDB** table `typing-speed-dev-app` (`pk` + `sk`, on-demand billing)
+- **AWS Lambda** (`typing-speed-dev-api`) — Node.js handler in `lambda/api/` (REST-style routes for users, scores, analytics, health, and optional Bedrock-backed AI routes)
 - **API Gateway** HTTP API with CORS for browser access
 - **S3** bucket (private) + **CloudFront** distribution (SPA: 403/404 return `index.html`)
 
@@ -46,13 +43,11 @@ npm install
 # Preview CloudFormation
 npx cdk synth typing-speed-dev
 
-# Deploy one stack
+# Deploy
 npm run deploy:dev
-npm run deploy:prod
 
 # Tear down
 npm run destroy:dev
-npm run destroy:prod
 ```
 
 Set the account/region if not using CLI defaults:
@@ -101,6 +96,4 @@ If you use AI coaching or AI practice passages, enable **model access** for the 
 
 ## Costs and cleanup
 
-Stacks use `RemovalPolicy.DESTROY` on data stores so **`cdk destroy`** can remove them (S3 uses `autoDeleteObjects`). **Production** enables **DynamoDB point-in-time recovery** when `envName === "prod"` (additional cost).
-
-Destroying a stack removes Cognito users and DynamoDB data for that environment. Use with care in production.
+The stack uses `RemovalPolicy.DESTROY` on data stores so **`cdk destroy`** can remove them (S3 uses `autoDeleteObjects`). Destroying the stack removes the Cognito user pool and DynamoDB data.

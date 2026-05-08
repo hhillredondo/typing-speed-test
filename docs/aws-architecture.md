@@ -78,16 +78,15 @@ Routes that require a logged-in user decode the **JWT** in the Lambda (Bearer to
 
 ---
 
-## 3. Infrastructure stacks (CDK)
+## 3. Infrastructure stack (CDK)
 
-The repository defines two CDK stacks (same shape, different names and tags):
+A single CDK stack defines the environment:
 
 | Stack name | Typical use |
 |-------------|-------------|
-| `typing-speed-dev` | Development / staging |
-| `typing-speed-prod` | Production |
+| `typing-speed-dev` | Single environment |
 
-Each stack creates its own Cognito pool, DynamoDB table, Lambda, API, S3 bucket, and CloudFront distribution. **User data and auth are not shared** between stacks.
+The stack creates the Cognito pool, DynamoDB table, Lambda, API, S3 bucket, and CloudFront distribution.
 
 **Source:** `infra/lib/typing-speed-stack.ts`, entry `infra/bin/typing-speed.ts`.
 

@@ -2,22 +2,26 @@
   "name": "typing-speed-test-infra",
   "version": "1.0.0",
   "private": true,
-  "description": "AWS CDK infrastructure for typing-speed-test (dev + prod)",
+  "description": "AWS CDK infrastructure for typing-speed-test",
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
     "cdk": "cdk",
     "synth": "cdk synth",
     "deploy:dev": "cdk deploy typing-speed-dev --require-approval never",
-    "deploy:prod": "cdk deploy typing-speed-prod --require-approval never",
     "destroy:dev": "cdk destroy typing-speed-dev --force",
-    "destroy:prod": "cdk destroy typing-speed-prod --force"
+    "test": "jest"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "aws-cdk": "^2.170.0",
+    "jest": "^29.7.0",
     "ts-node": "^10.9.2",
     "typescript": "~5.3.3"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": ["<rootDir>/test/**/*.test.js"]
   },
   "dependencies": {
     "aws-cdk-lib": "^2.170.0",

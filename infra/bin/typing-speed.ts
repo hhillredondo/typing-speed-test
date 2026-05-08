@@ -15,10 +15,4 @@ new TypingSpeedStack(app, "typing-speed-dev", {
   description: "Typing speed app — development",
 });
 
-new TypingSpeedStack(app, "typing-speed-prod", {
-  envName: "prod",
-  env,
-  description: "Typing speed app — production",
-});
-
 app.synth();

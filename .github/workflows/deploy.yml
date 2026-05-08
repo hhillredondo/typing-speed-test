@@ -1,0 +1,136 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+permissions:
+  id-token: write   # required for OIDC
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  STACK_NAME: typing-speed-dev
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            infra/package-lock.json
+
+      - name: Install frontend deps
+        run: npm ci
+
+      - name: Install infra deps
+        run: npm ci
+        working-directory: infra
+
+      - name: Type-check frontend
+        run: npm run typecheck
+
+      - name: Frontend unit tests
+        run: npm run test:ci
+
+      - name: Lambda unit tests
+        run: npm test
+        working-directory: infra
+
+      - name: CDK synth (compile check)
+        run: npx cdk synth $STACK_NAME --quiet
+        working-directory: infra
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E (against built artifact)
+        run: npm run test:e2e
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+      - name: Persist build for deploy job
+        uses: actions/upload-artifact@v4
+        with:
+          name: build
+          path: build/
+          retention-days: 1
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: infra/package-lock.json
+
+      - name: Install infra deps
+        run: npm ci
+        working-directory: infra
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build
+          path: build/
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: CDK deploy
+        run: npx cdk deploy $STACK_NAME --require-approval never --outputs-file cdk-outputs.json
+        working-directory: infra
+
+      - name: Read stack outputs
+        id: outputs
+        working-directory: infra
+        run: |
+          BUCKET=$(jq -r ".\"$STACK_NAME\".SiteBucketName" cdk-outputs.json)
+          DIST=$(jq -r ".\"$STACK_NAME\".DistributionId" cdk-outputs.json)
+          echo "bucket=$BUCKET" >> "$GITHUB_OUTPUT"
+          echo "distribution=$DIST" >> "$GITHUB_OUTPUT"
+
+      - name: Sync build to S3 (long-cached static assets)
+        run: |
+          aws s3 sync build/static/ s3://${{ steps.outputs.outputs.bucket }}/static/ \
+            --delete \
+            --cache-control "public,max-age=31536000,immutable"
+
+      - name: Sync remaining build files (no cache)
+        run: |
+          aws s3 sync build/ s3://${{ steps.outputs.outputs.bucket }}/ \
+            --delete \
+            --exclude "static/*" \
+            --cache-control "public,max-age=0,must-revalidate"
+
+      - name: Invalidate CloudFront
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ steps.outputs.outputs.distribution }} \
+            --paths "/*"
