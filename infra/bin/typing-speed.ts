@@ -4,6 +4,8 @@ import { TypingSpeedStack } from "../lib/typing-speed-stack";
 
 const app = new cdk.App();
 
+cdk.Tags.of(app).add("Project", "typing-speed-test");
+
 const account = process.env.CDK_DEFAULT_ACCOUNT;
 const region = process.env.CDK_DEFAULT_REGION ?? "eu-west-1";
 
