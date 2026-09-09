@@ -59,7 +59,9 @@ jobs:
       - name: Build frontend
         run: npm run build
         env:
-          REACT_APP_API_URL: ${{ vars.REACT_APP_API_URL }}
+          # Vite reads VITE_-prefixed vars. Falls back to the old repo variable
+          # so this keeps working until you rename it in GitHub settings.
+          VITE_API_URL: ${{ vars.VITE_API_URL || vars.REACT_APP_API_URL }}
 
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium

@@ -84,10 +84,10 @@ export CDK_DEFAULT_ACCOUNT=123456789012
 Point the React app at the deployed API and Cognito (use values from stack Outputs):
 
 ```bash
-REACT_APP_API_URL=https://xxxxxxxx.execute-api.eu-central-1.amazonaws.com
-REACT_APP_COGNITO_USER_POOL_ID=eu-central-1_xxxx
-REACT_APP_COGNITO_CLIENT_ID=xxxxxxxxxxxxxxxxxxxxxxxxxx
-REACT_APP_AWS_REGION=eu-central-1
+VITE_API_URL=https://xxxxxxxx.execute-api.eu-central-1.amazonaws.com
+VITE_COGNITO_USER_POOL_ID=eu-central-1_xxxx
+VITE_COGNITO_CLIENT_ID=xxxxxxxxxxxxxxxxxxxxxxxxxx
+VITE_AWS_REGION=eu-central-1
 ```
 
 ## Bedrock (AI features)

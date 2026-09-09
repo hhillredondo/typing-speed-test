@@ -118,16 +118,16 @@ Global secondary index **`gsi1`**: items with `gsi1pk = SCORE` and `gsi1sk` = ti
 
 ## 6. Deploy and environment variables
 
-Operational steps (bootstrap, `cdk deploy`, uploading the build to S3, CloudFront invalidation, React `REACT_APP_*` variables) are documented in **[infra/README.md](../infra/README.md)**.
+Operational steps (bootstrap, `cdk deploy`, uploading the build to S3, CloudFront invalidation, Vite `VITE_*` variables) are documented in **[infra/README.md](../infra/README.md)**.
 
 Typical frontend build-time variables:
 
 | Variable | Purpose |
 |----------|---------|
-| `REACT_APP_API_URL` | Base URL of the HTTP API |
-| `REACT_APP_COGNITO_USER_POOL_ID` | Cognito User Pool ID |
-| `REACT_APP_COGNITO_CLIENT_ID` | Cognito app client ID |
-| `REACT_APP_AWS_REGION` | Region string for the Cognito client |
+| `VITE_API_URL` | Base URL of the HTTP API |
+| `VITE_COGNITO_USER_POOL_ID` | Cognito User Pool ID |
+| `VITE_COGNITO_CLIENT_ID` | Cognito app client ID |
+| `VITE_AWS_REGION` | Region string for the Cognito client |
 
 ---
 

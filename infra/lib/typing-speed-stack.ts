@@ -285,7 +285,7 @@ export class TypingSpeedStack extends Stack {
 
     new CfnOutput(this, "SiteBucketName", {
       value: this.siteBucket.bucketName,
-      description: "Upload CRA build: aws s3 sync build/ s3://BUCKET --delete",
+      description: "Upload the Vite build: aws s3 sync build/ s3://BUCKET --delete",
       exportName: `${prefix}-site-bucket`,
     });
 

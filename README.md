@@ -27,10 +27,10 @@ Requirements: **Node.js** (LTS recommended), **npm**.
 
 ```bash
 npm install
-npm start
+npm run dev
 ```
 
-Opens the app at [http://localhost:3000](http://localhost:3000). For API calls (login, scores, analytics), configure the React app to point at a deployed backend (see environment variables below).
+Opens the app at [http://localhost:3000](http://localhost:3000). For API calls (login, scores, analytics), point the app at a deployed backend (see environment variables below).
 
 ### Environment variables (frontend)
 
@@ -38,10 +38,12 @@ Copy [`.env.example`](.env.example) to **`.env.local`** (ignored by git) and fil
 
 | Variable | Description |
 |----------|-------------|
-| `REACT_APP_API_URL` | Base URL of the HTTP API (no trailing slash required by all clients; match your deployment) |
-| `REACT_APP_COGNITO_USER_POOL_ID` | Cognito User Pool ID |
-| `REACT_APP_COGNITO_CLIENT_ID` | Cognito app client ID |
-| `REACT_APP_AWS_REGION` | AWS region (e.g. `eu-central-1`) |
+| `VITE_API_URL` | Base URL of the HTTP API (no trailing slash required by all clients; match your deployment) |
+| `VITE_COGNITO_USER_POOL_ID` | Cognito User Pool ID |
+| `VITE_COGNITO_CLIENT_ID` | Cognito app client ID |
+| `VITE_AWS_REGION` | AWS region (e.g. `eu-central-1`) |
+
+Only `VITE_`-prefixed variables are exposed to the client bundle; that prefix is Vite's opt-in boundary, so nothing else in your environment can leak into the build.
 
 After changing `.env.local`, restart the dev server.
 
@@ -51,17 +53,18 @@ After changing `.env.local`, restart the dev server.
 npm run build
 ```
 
-Outputs a production bundle under `build/`, which you upload to the S3 bucket behind CloudFront (see `infra/README.md`).
+Type-checks, then outputs a production bundle under `build/`, with hashed assets in `build/static/`. The deploy workflow relies on that split: `build/static/` is synced with immutable caching and everything else with `must-revalidate`.
 
 ### Tests
 
 ```bash
-npm test
+npm run test:ci    # unit tests (Vitest)
+npm run test:e2e   # end-to-end (Playwright, serves build/)
 ```
 
 ## Tech stack
 
-- **UI:** React, TypeScript, Material UI
+- **UI:** React 18 + Vite, TypeScript, Material UI
 - **API:** AWS Lambda (Node.js), API Gateway HTTP API
 - **Data:** DynamoDB (single-table design)
 - **Auth:** Amazon Cognito
@@ -70,4 +73,4 @@ npm test
 
 ## License
 
-Specify your license in a `LICENSE` file at the repository root. This README does not impose a license by default.
+MIT. See [LICENSE](LICENSE).
