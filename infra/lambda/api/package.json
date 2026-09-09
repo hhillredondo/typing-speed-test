@@ -3,7 +3,7 @@
   "private": true,
   "description": "Typing speed REST API Lambda. Bundled with esbuild so aws-jwt-verify ships with the function.",
   "dependencies": {
-    "aws-jwt-verify": "^4.0.1"
+    "aws-jwt-verify": "^5.2.1"
   },
   "devDependencies": {
     "esbuild": "^0.25.0"
