@@ -18,7 +18,8 @@ import { isUserLoggedIn } from "../../core/isUserLoggedIn";
 
 interface Score {
   _id: string;
-  user: string;
+  /** Set by the API from the verified token; the leaderboard exposes no user ids. */
+  isMine: boolean;
   userName: string;
   score: number;
   createdAt: string;
@@ -35,8 +36,6 @@ const Scores: React.FC = () => {
   const [allScores, setAllScores] = useState<Score[]>([]);
   const [tab, setTab] = useState(0);
 
-  const userStr = localStorage.getItem("user");
-  const user = userStr ? JSON.parse(userStr) : null;
   const loggedIn = isUserLoggedIn();
 
   useEffect(() => {
@@ -47,7 +46,7 @@ const Scores: React.FC = () => {
 
   const globalSorted = [...allScores].sort((a, b) => b.score - a.score);
   const personalSorted = loggedIn
-    ? globalSorted.filter((s) => s.user === user?._id)
+    ? globalSorted.filter((s) => s.isMine)
     : [];
 
   const renderTable = (scores: Score[], showUser: boolean) => {
@@ -84,7 +83,7 @@ const Scores: React.FC = () => {
                 </TableCell>
                 {showUser && (
                   <TableCell>
-                    {loggedIn && s.user === user?._id ? (
+                    {loggedIn && s.isMine ? (
                       <strong>{s.userName}</strong>
                     ) : (
                       s.userName

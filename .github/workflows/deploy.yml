@@ -44,6 +44,10 @@ jobs:
       - name: Frontend unit tests
         run: npm run test:ci
 
+      - name: Build API Lambda bundle
+        run: npm ci && npm run build
+        working-directory: infra/lambda/api
+
       - name: Lambda unit tests
         run: npm test
         working-directory: infra
@@ -93,6 +97,10 @@ jobs:
       - name: Install infra deps
         run: npm ci
         working-directory: infra
+
+      - name: Build API Lambda bundle
+        run: npm ci && npm run build
+        working-directory: infra/lambda/api
 
       - name: Download build artifact
         uses: actions/download-artifact@v4

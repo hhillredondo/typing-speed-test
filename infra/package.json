@@ -21,7 +21,12 @@
   },
   "jest": {
     "testEnvironment": "node",
-    "testMatch": ["<rootDir>/test/**/*.test.js"]
+    "testMatch": [
+      "<rootDir>/test/**/*.test.js"
+    ],
+    "modulePaths": [
+      "<rootDir>/lambda/api/node_modules"
+    ]
   },
   "dependencies": {
     "aws-cdk-lib": "^2.170.0",

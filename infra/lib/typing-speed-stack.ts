@@ -81,8 +81,11 @@ export class TypingSpeedStack extends Stack {
       preventUserExistenceErrors: true,
     });
 
-    // --- API Lambda (placeholder handler; extend for /api/users, /api/scores) ---
-    const apiLambdaPath = path.join(__dirname, "..", "lambda", "api");
+    // --- API Lambda ---
+    // Points at the esbuild output, not the source dir: the handler depends on
+    // aws-jwt-verify, so the function must ship its bundled dependencies.
+    // Build with `npm ci && npm run build` in lambda/api before `cdk deploy`.
+    const apiLambdaPath = path.join(__dirname, "..", "lambda", "api", "dist");
 
     const apiLogGroup = new logs.LogGroup(this, "ApiLogGroup", {
       retention: logs.RetentionDays.ONE_WEEK,
@@ -103,6 +106,7 @@ export class TypingSpeedStack extends Stack {
         ENV_NAME: envName,
         COGNITO_USER_POOL_ID: this.userPool.userPoolId,
         COGNITO_CLIENT_ID: this.userPoolClient.userPoolClientId,
+        // ALLOWED_ORIGIN is set below, once the distribution domain is known.
         // Optional: set to override inference profile (default is chosen from AWS_REGION in Lambda).
         // BEDROCK_MODEL_ID: "eu.amazon.nova-micro-v1:0",
       },
@@ -238,6 +242,14 @@ export class TypingSpeedStack extends Stack {
     // --- Outputs for frontend / CI ---
     const region = Stack.of(this).region;
     const issuer = `https://cognito-idp.${region}.amazonaws.com/${this.userPool.userPoolId}`;
+
+    // Pin the API's CORS origin to the site itself. Done after the distribution is
+    // constructed because the domain is only known then; there is no cycle, as the
+    // distribution does not depend on the function.
+    apiFunction.addEnvironment(
+      "ALLOWED_ORIGIN",
+      `https://${this.distribution.distributionDomainName}`
+    );
 
     new CfnOutput(this, "HttpApiUrl", {
       value: this.httpApi.apiEndpoint,

@@ -21,6 +21,7 @@ const {
   ConverseCommand,
 } = require("@aws-sdk/client-bedrock-runtime");
 const crypto = require("crypto");
+const { CognitoJwtVerifier } = require("aws-jwt-verify");
 const {
   resolveBedrockModelId,
   isNotableSession,
@@ -39,9 +40,14 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const cognito = new CognitoIdentityProviderClient({});
 const bedrock = new BedrockRuntimeClient({});
 
+// Set ALLOWED_ORIGIN to the CloudFront distribution URL. Falls back to "*" only
+// when unset (local `sam local` / curl testing), never silently in a deployed stack.
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "*";
+
 const headers = {
   "Content-Type": "application/json",
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
+  Vary: "Origin",
 };
 
 function response(statusCode, body) {
@@ -59,10 +65,60 @@ function parseBody(event) {
   }
 }
 
-function decodeJwtPayload(token) {
-  const payload = token.split(".")[1];
-  return JSON.parse(Buffer.from(payload, "base64url").toString());
+// Verifies the RS256 signature against the Cognito JWKS, plus issuer, expiry,
+// audience (client id) and token_use. aws-jwt-verify caches the JWKS and refetches
+// on key rotation, so this is a network call only on cold start / rotation.
+//
+// Never parse a JWT without verifying it: the payload is attacker-controlled until
+// the signature checks out.
+const jwtVerifier =
+  USER_POOL_ID && CLIENT_ID
+    ? CognitoJwtVerifier.create({
+        userPoolId: USER_POOL_ID,
+        tokenUse: "id",
+        clientId: CLIENT_ID,
+      })
+    : null;
+
+/**
+ * Resolve the caller's verified claims, or null if the request is unauthenticated
+ * or the token fails verification for any reason.
+ */
+async function authenticate(event) {
+  if (!jwtVerifier) {
+    console.error("JWT verifier not configured: COGNITO_USER_POOL_ID / COGNITO_CLIENT_ID missing");
+    return null;
+  }
+  const authHeader = event.headers?.authorization || event.headers?.Authorization || "";
+  if (!authHeader.startsWith("Bearer ")) return null;
+  const token = authHeader.slice(7).trim();
+  if (!token) return null;
+  try {
+    return await jwtVerifier.verify(token);
+  } catch (err) {
+    console.warn("Token verification failed:", err.message);
+    return null;
+  }
 }
+
+const UNAUTHORIZED = response(401, { message: "Not authorized" });
+
+const MAX_USERNAME_LENGTH = 64;
+const MAX_ANALYTICS_BYTES = 64 * 1024;
+
+/**
+ * Reject oversized analytics payloads rather than persisting whatever the client
+ * sends. DynamoDB items are capped at 400 KB and every byte here is attacker-chosen.
+ */
+function boundedAnalytics(analytics) {
+  if (!analytics || typeof analytics !== "object") return null;
+  if (Buffer.byteLength(JSON.stringify(analytics), "utf8") > MAX_ANALYTICS_BYTES) {
+    console.warn("Rejected oversized analytics payload");
+    return null;
+  }
+  return analytics;
+}
+
 
 // ── Auth routes ──
 
@@ -115,7 +171,7 @@ async function handleConfirmSignUp(event) {
     }));
 
     const idToken = authResult.AuthenticationResult.IdToken;
-    const claims = decodeJwtPayload(idToken);
+    const claims = await jwtVerifier.verify(idToken);
 
     await ddb.send(new PutCommand({
       TableName: TABLE,
@@ -185,7 +241,7 @@ async function handleLogin(event) {
     }));
 
     const idToken = authResult.AuthenticationResult.IdToken;
-    const claims = decodeJwtPayload(idToken);
+    const claims = await jwtVerifier.verify(idToken);
 
     return response(200, {
       _id: claims.sub,
@@ -201,21 +257,14 @@ async function handleLogin(event) {
 }
 
 async function handleGetMe(event) {
-  const authHeader = event.headers?.authorization || "";
-  if (!authHeader.startsWith("Bearer ")) {
-    return response(401, { message: "Not authorized, no token" });
-  }
+  const claims = await authenticate(event);
+  if (!claims) return UNAUTHORIZED;
 
-  try {
-    const claims = decodeJwtPayload(authHeader.split(" ")[1]);
-    return response(200, {
-      id: claims.sub,
-      name: claims.name || "",
-      email: claims.email,
-    });
-  } catch {
-    return response(401, { message: "Not authorized" });
-  }
+  return response(200, {
+    id: claims.sub,
+    name: claims.name || "",
+    email: claims.email,
+  });
 }
 
 async function deleteAllUserDdbItems(userId) {
@@ -249,13 +298,12 @@ async function handleDeleteAccount(event) {
     return response(400, { message: "Password is required to delete your account" });
   }
 
-  let claims;
-  try {
-    claims = decodeJwtPayload(authHeader.split(" ")[1]);
-  } catch {
-    return response(401, { message: "Not authorized" });
-  }
+  const claims = await authenticate(event);
+  if (!claims) return UNAUTHORIZED;
 
+  // email and sub must come from the same verified token and are never taken as
+  // independent inputs: re-authenticating one while deleting data keyed on the
+  // other would let a caller destroy another user's records.
   const email = claims.email;
   const sub = claims.sub;
   if (!email) {
@@ -292,12 +340,19 @@ async function handleDeleteAccount(event) {
 
 async function handleCreateScore(event) {
   const body = parseBody(event);
-  const userId = body.user || "anonymous";
-  const score = body.score ?? 0;
-  const userName = body.userName || "Anonymous";
+
+  // Anonymous submissions stay supported, but a *claimed* identity must be proved:
+  // the caller's id and display name come from the verified token, never from the body.
+  const claims = await authenticate(event);
+  const userId = claims ? claims.sub : "anonymous";
+  const userName = claims
+    ? claims.name || claims.email || "Anonymous"
+    : String(body.userName || "Anonymous").slice(0, MAX_USERNAME_LENGTH);
+
+  const score = Number(body.score) || 0;
   const accuracy = body.accuracy ?? null;
   const mistakes = body.mistakes ?? null;
-  const analytics = body.analytics || null;
+  const analytics = boundedAnalytics(body.analytics);
 
   const now = new Date().toISOString();
   const id = crypto.randomUUID();
@@ -336,7 +391,10 @@ async function handleCreateScore(event) {
   });
 }
 
-async function handleGetScores() {
+async function handleGetScores(event) {
+  const claims = await authenticate(event);
+  const callerId = claims ? claims.sub : null;
+
   const result = await ddb.send(new QueryCommand({
     TableName: TABLE,
     IndexName: "gsi1",
@@ -346,9 +404,12 @@ async function handleGetScores() {
     Limit: 500,
   }));
 
+  // No user identifier is returned: the leaderboard is public, and echoing
+  // item.userId here enumerated every user's Cognito sub. The caller only needs
+  // to know which rows are theirs.
   const scores = (result.Items || []).map((item) => ({
     _id: item.scoreId,
-    user: item.userId,
+    isMine: callerId !== null && item.userId === callerId,
     userName: item.userName || "Anonymous",
     score: item.score,
     accuracy: item.accuracy ?? null,
@@ -467,39 +528,28 @@ async function updateAnalyticsProfile(userId, score, accuracy, mistakes, analyti
 }
 
 async function handleGetAnalytics(event) {
-  const authHeader = event.headers?.authorization || "";
-  if (!authHeader.startsWith("Bearer ")) {
-    return response(401, { message: "Not authorized, no token" });
+  const claims = await authenticate(event);
+  if (!claims) return UNAUTHORIZED;
+  const userId = claims.sub;
+
+  const result = await ddb.send(new GetCommand({
+    TableName: TABLE,
+    Key: { pk: `USER#${userId}`, sk: "ANALYTICS" },
+  }));
+
+  if (!result.Item) {
+    return response(200, { totalTests: 0 });
   }
 
-  try {
-    const claims = decodeJwtPayload(authHeader.split(" ")[1]);
-    const userId = claims.sub;
-
-    const result = await ddb.send(new GetCommand({
-      TableName: TABLE,
-      Key: { pk: `USER#${userId}`, sk: "ANALYTICS" },
-    }));
-
-    if (!result.Item) {
-      return response(200, { totalTests: 0 });
-    }
-
-    const { pk, sk, rollingWindows, ...profile } = result.Item;
-    return response(200, profile);
-  } catch {
-    return response(401, { message: "Not authorized" });
-  }
+  const { pk, sk, rollingWindows, ...profile } = result.Item;
+  return response(200, profile);
 }
 
 async function handleGetAnalyticsHistory(event) {
-  const authHeader = event.headers?.authorization || "";
-  if (!authHeader.startsWith("Bearer ")) {
-    return response(401, { message: "Not authorized, no token" });
-  }
+  const claims = await authenticate(event);
+  if (!claims) return UNAUTHORIZED;
 
   try {
-    const claims = decodeJwtPayload(authHeader.split(" ")[1]);
     const userId = claims.sub;
 
     const result = await ddb.send(new QueryCommand({
@@ -597,17 +647,9 @@ function buildPassagePrompt(profile) {
 }
 
 async function handleGetCoaching(event) {
-  const authHeader = event.headers?.authorization || "";
-  if (!authHeader.startsWith("Bearer ")) {
-    return response(401, { message: "Not authorized, no token" });
-  }
-
-  let userId;
-  try {
-    userId = decodeJwtPayload(authHeader.split(" ")[1]).sub;
-  } catch {
-    return response(401, { message: "Not authorized" });
-  }
+  const claims = await authenticate(event);
+  if (!claims) return UNAUTHORIZED;
+  const userId = claims.sub;
 
   const pk = `USER#${userId}`;
   const profileResult = await ddb.send(new GetCommand({ TableName: TABLE, Key: { pk, sk: "ANALYTICS" } }));
@@ -663,17 +705,9 @@ async function handleGetCoaching(event) {
 }
 
 async function handleGeneratePassage(event) {
-  const authHeader = event.headers?.authorization || "";
-  if (!authHeader.startsWith("Bearer ")) {
-    return response(401, { message: "Not authorized, no token" });
-  }
-
-  let userId;
-  try {
-    userId = decodeJwtPayload(authHeader.split(" ")[1]).sub;
-  } catch {
-    return response(401, { message: "Not authorized" });
-  }
+  const claims = await authenticate(event);
+  if (!claims) return UNAUTHORIZED;
+  const userId = claims.sub;
 
   const pk = `USER#${userId}`;
   const profileResult = await ddb.send(new GetCommand({ TableName: TABLE, Key: { pk, sk: "ANALYTICS" } }));
@@ -751,7 +785,7 @@ exports.handler = async (event) => {
     if (path === "/api/users/me" && method === "GET") return await handleGetMe(event);
     if (path === "/api/users/me" && method === "DELETE") return await handleDeleteAccount(event);
     if (path === "/api/scores" && method === "POST") return await handleCreateScore(event);
-    if (path === "/api/scores" && method === "GET") return await handleGetScores();
+    if (path === "/api/scores" && method === "GET") return await handleGetScores(event);
     if (path === "/api/analytics" && method === "GET") return await handleGetAnalytics(event);
     if (path === "/api/analytics/history" && method === "GET") return await handleGetAnalyticsHistory(event);
     if (path === "/api/coaching" && method === "GET") return await handleGetCoaching(event);

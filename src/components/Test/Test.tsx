@@ -31,7 +31,6 @@ const Test: React.FC<{ onTestRunning?: (running: boolean) => void }> = ({
   const loggedUser = localStorage.getItem("user");
   const user = loggedUser ? JSON.parse(loggedUser) : null;
   const userId = user?._id || "";
-  const userName = user?.name || "";
 
   const [words, setWords] = useState<string[]>(() =>
     shuffleArray([...englishWords])
@@ -107,9 +106,7 @@ const Test: React.FC<{ onTestRunning?: (running: boolean) => void }> = ({
 
     if (userId) {
       createScore({
-        user: userId,
         score: scoreRef.current,
-        userName,
         accuracy: finalAccuracyRef.current,
         mistakes: mistakesRef.current,
         analytics,
@@ -117,7 +114,7 @@ const Test: React.FC<{ onTestRunning?: (running: boolean) => void }> = ({
     }
 
     setShowModal(true);
-  }, [userId, userName]);
+  }, [userId]);
 
   useEffect(() => {
     if (!testRunning) return;

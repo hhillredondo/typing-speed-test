@@ -1,0 +1,18 @@
+version: 2
+# Dependency scanning for a public repo: GitHub-native, no CI minutes.
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule: { interval: weekly }
+  - package-ecosystem: npm
+    directory: "/"
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+  - package-ecosystem: npm
+    directory: "/infra"
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+  - package-ecosystem: npm
+    directory: "/infra/lambda/api"
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
