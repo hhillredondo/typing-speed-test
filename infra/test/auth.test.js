@@ -64,7 +64,6 @@ describe("token verification", () => {
   const protectedRoutes = [
     ["/api/users/me", "GET"],
     ["/api/analytics", "GET"],
-    ["/api/analytics/history", "GET"],
     ["/api/coaching", "GET"],
     ["/api/drill/passage", "POST"],
   ];

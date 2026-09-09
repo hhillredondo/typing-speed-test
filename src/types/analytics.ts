@@ -73,10 +73,3 @@ export interface CoachingResponse {
   trigger?: "new_pb" | "milestone" | "periodic";
   message?: string;
 }
-
-export interface PassageResponse {
-  available: boolean;
-  passage?: string;
-  generatedAt?: string;
-  message?: string;
-}

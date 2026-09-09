@@ -545,39 +545,6 @@ async function handleGetAnalytics(event) {
   return response(200, profile);
 }
 
-async function handleGetAnalyticsHistory(event) {
-  const claims = await authenticate(event);
-  if (!claims) return UNAUTHORIZED;
-
-  try {
-    const userId = claims.sub;
-
-    const result = await ddb.send(new QueryCommand({
-      TableName: TABLE,
-      KeyConditionExpression: "pk = :pk AND begins_with(sk, :prefix)",
-      ExpressionAttributeValues: {
-        ":pk": `USER#${userId}`,
-        ":prefix": "SCORE#",
-      },
-      ScanIndexForward: false,
-      Limit: 50,
-    }));
-
-    const history = (result.Items || []).map((item) => ({
-      _id: item.scoreId,
-      score: item.score,
-      accuracy: item.accuracy ?? null,
-      mistakes: item.mistakes ?? null,
-      createdAt: item.createdAt,
-      windows: item.analytics?.windows || null,
-    }));
-
-    return response(200, history);
-  } catch {
-    return response(401, { message: "Not authorized" });
-  }
-}
-
 // ── Bedrock AI ──
 
 const COACHING_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -787,7 +754,6 @@ exports.handler = async (event) => {
     if (path === "/api/scores" && method === "POST") return await handleCreateScore(event);
     if (path === "/api/scores" && method === "GET") return await handleGetScores(event);
     if (path === "/api/analytics" && method === "GET") return await handleGetAnalytics(event);
-    if (path === "/api/analytics/history" && method === "GET") return await handleGetAnalyticsHistory(event);
     if (path === "/api/coaching" && method === "GET") return await handleGetCoaching(event);
     if (path === "/api/drill/passage" && method === "POST") return await handleGeneratePassage(event);
     if (path === "/health" || path === "/api/health") {
