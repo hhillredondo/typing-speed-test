@@ -23,9 +23,6 @@
     "testEnvironment": "node",
     "testMatch": [
       "<rootDir>/test/**/*.test.js"
-    ],
-    "modulePaths": [
-      "<rootDir>/lambda/api/node_modules"
     ]
   },
   "dependencies": {

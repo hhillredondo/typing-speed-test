@@ -38,9 +38,14 @@ jest.mock(
   () => ({ BedrockRuntimeClient: class {}, ConverseCommand: class {} }),
   { virtual: true }
 );
-jest.mock("aws-jwt-verify", () => ({
-  CognitoJwtVerifier: { create: () => ({ verify: mockVerify }) },
-}));
+// `virtual: true` like the mocks above: aws-jwt-verify is a dependency of
+// lambda/api, not of infra, so it is not resolvable from here. The mock replaces
+// it wholesale, so nothing in this suite needs the real package installed.
+jest.mock(
+  "aws-jwt-verify",
+  () => ({ CognitoJwtVerifier: { create: () => ({ verify: mockVerify }) } }),
+  { virtual: true }
+);
 
 process.env.TABLE_NAME = "test-table";
 process.env.COGNITO_USER_POOL_ID = "eu-central-1_test";
