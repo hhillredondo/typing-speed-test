@@ -1,76 +1,48 @@
 # Typing speed test
 
-A browser-based typing speed test with a global leaderboard, personal analytics, and optional AI-powered coaching. The frontend is a React (Create React App) application; the backend is a serverless API on AWS.
+A typing test that keeps track of how you are actually doing. You type a passage
+against the clock and it records the usual words-per-minute and accuracy, but it
+also keeps per-key and per-bigram timings, so it can tell you which keys are
+slowing you down and generate drills aimed at them. Signed-in users get a
+leaderboard, charts over time, and a short written summary of their weak spots.
 
-## Features
+The frontend is React and Vite. The backend is a Lambda behind API Gateway, with
+DynamoDB for storage, Cognito for accounts, and Bedrock for the written
+summaries.
 
-- **Typing test** — Timed word test with accuracy and WPM-style scoring.
-- **Accounts** — Sign up and sign in via Amazon Cognito (email verification).
-- **Leaderboard** — Global scores stored in DynamoDB and queried through the API.
-- **Analytics** — Per-key and bigram statistics, pacing windows, trends, fatigue-style labels, backspace metrics, and a keyboard heatmap (logged-in users, data from completed tests).
-- **Weakness Drill** — Short practice sessions targeting weak keys and bigrams from word lists, plus optional **AI-generated practice passages** (Amazon Bedrock).
-- **AI Coach** — Short personalized summaries on the Analytics page (Bedrock), with server-side caching to limit cost.
+## Running it locally
 
-## Documentation
-
-| Doc | Contents |
-|-----|----------|
-| [docs/README.md](docs/README.md) | Index of all documentation |
-| [docs/aws-architecture.md](docs/aws-architecture.md) | AWS components and diagrams |
-| [docs/analytics.md](docs/analytics.md) | How typing statistics are computed and stored |
-| [docs/ai-features.md](docs/ai-features.md) | AI coaching and AI practice passages |
-| [infra/README.md](infra/README.md) | CDK deploy commands and build-time environment variables |
-
-## Local development
-
-Requirements: **Node.js** (LTS recommended), **npm**.
+You need Node 20 or newer.
 
 ```bash
 npm install
 npm run dev
 ```
 
-Opens the app at [http://localhost:3000](http://localhost:3000). For API calls (login, scores, analytics), point the app at a deployed backend (see environment variables below).
+The app comes up on http://localhost:3000. The typing test itself runs entirely
+in the browser, so it works with no further setup.
 
-### Environment variables (frontend)
-
-Copy [`.env.example`](.env.example) to **`.env.local`** (ignored by git) and fill in values, or set:
-
-| Variable | Description |
-|----------|-------------|
-| `VITE_API_URL` | Base URL of the HTTP API (no trailing slash required by all clients; match your deployment) |
-| `VITE_COGNITO_USER_POOL_ID` | Cognito User Pool ID |
-| `VITE_COGNITO_CLIENT_ID` | Cognito app client ID |
-| `VITE_AWS_REGION` | AWS region (e.g. `eu-central-1`) |
-
-Only `VITE_`-prefixed variables are exposed to the client bundle; that prefix is Vite's opt-in boundary, so nothing else in your environment can leak into the build.
-
-After changing `.env.local`, restart the dev server.
-
-### Build
+Accounts, the leaderboard and the saved analytics all talk to the API, so those
+need a backend to point at. Copy the example env file and fill in the values from
+a deployed stack:
 
 ```bash
-npm run build
+cp .env.example .env.local
 ```
 
-Type-checks, then outputs a production bundle under `build/`, with hashed assets in `build/static/`. The deploy workflow relies on that split: `build/static/` is synced with immutable caching and everything else with `must-revalidate`.
+```
+VITE_API_URL=https://your-api-id.execute-api.eu-central-1.amazonaws.com
+VITE_COGNITO_USER_POOL_ID=eu-central-1_xxxxxxxxx
+VITE_COGNITO_CLIENT_ID=xxxxxxxxxxxxxxxxxxxxxxxxxx
+VITE_AWS_REGION=eu-central-1
+```
 
-### Tests
+Only variables starting with `VITE_` reach the browser bundle, which is Vite's
+way of making sure nothing else in your environment leaks into the build.
+Restart the dev server after editing the file.
+
+## Tests
 
 ```bash
-npm run test:ci    # unit tests (Vitest)
-npm run test:e2e   # end-to-end (Playwright, serves build/)
+npm run test:ci
 ```
-
-## Tech stack
-
-- **UI:** React 18 + Vite, TypeScript, Material UI
-- **API:** AWS Lambda (Node.js), API Gateway HTTP API
-- **Data:** DynamoDB (single-table design)
-- **Auth:** Amazon Cognito
-- **Hosting:** S3 + CloudFront
-- **AI (optional):** Amazon Bedrock (Nova Micro via regional inference profiles)
-
-## License
-
-MIT. See [LICENSE](LICENSE).
