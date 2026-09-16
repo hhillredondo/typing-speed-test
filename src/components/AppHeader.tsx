@@ -32,7 +32,14 @@ const AppHeader: React.FC<{
         px: { xs: 1, sm: 4, md: "200px" },
       }}
     >
-      <Toolbar disableGutters>
+      <Toolbar
+        disableGutters
+        sx={{
+          "& .MuiSvgIcon-root": { fontSize: "2rem" },
+          // Six padded 48px icons overflow phone widths
+          "& .MuiIconButton-root": { p: { xs: 0, sm: 1 } },
+        }}
+      >
         <Box sx={{ display: "flex", gap: 0 }}>
           <Tooltip title="Home">
             <IconButton
