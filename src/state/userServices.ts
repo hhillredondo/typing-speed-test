@@ -1,12 +1,12 @@
-import axios from "axios";
-import { baseUrl } from "../utils/constants";
+import { api } from "./apiClient";
+import { clearSession, readSession, writeSession } from "./session";
 
 export const register = async (userData: {
   name: string;
   email: string;
   password: string;
 }) => {
-  const response = await axios.post(baseUrl + "/api/users/", userData);
+  const response = await api.post("/api/users/", userData);
   return response.data;
 };
 
@@ -15,42 +15,39 @@ export const confirmSignUp = async (data: {
   password: string;
   code: string;
 }) => {
-  const response = await axios.post(baseUrl + "/api/users/confirm", data);
+  const response = await api.post("/api/users/confirm", data);
   if (response.data) {
-    localStorage.setItem("user", JSON.stringify(response.data));
+    writeSession(response.data);
   }
   return response.data;
 };
 
 export const resendCode = async (data: { email: string }) => {
-  const response = await axios.post(baseUrl + "/api/users/resend-code", data);
+  const response = await api.post("/api/users/resend-code", data);
   return response.data;
 };
 
-export const login = async (userData: {
-  email: string;
-  password: string;
-}) => {
-  const response = await axios.post(baseUrl + "/api/users/login", userData);
+export const login = async (userData: { email: string; password: string }) => {
+  const response = await api.post("/api/users/login", userData);
   if (response.data) {
-    localStorage.setItem("user", JSON.stringify(response.data));
+    writeSession(response.data);
   }
   return response.data;
 };
 
 export const logout = async () => {
-  localStorage.setItem("user", "");
+  const session = readSession();
+  // Locally first: signing out must not depend on the network succeeding.
+  clearSession();
+  if (!session?.refreshToken) return;
+  try {
+    await api.post("/api/users/logout", { refreshToken: session.refreshToken });
+  } catch {
+    // Best effort. The token expires on its own; nothing here is actionable.
+  }
 };
 
 export const deleteAccount = async (password: string) => {
-  const raw = localStorage.getItem("user");
-  if (!raw) throw new Error("Not logged in");
-  const user = JSON.parse(raw) as { token?: string };
-  if (!user.token) throw new Error("Not logged in");
-
-  const response = await axios.delete(`${baseUrl}/api/users/me`, {
-    data: { password },
-    headers: { Authorization: `Bearer ${user.token}` },
-  });
+  const response = await api.delete("/api/users/me", { data: { password } });
   return response.data;
 };

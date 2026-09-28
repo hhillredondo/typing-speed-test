@@ -17,7 +17,7 @@ import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import TrendingFlatIcon from "@mui/icons-material/TrendingFlat";
 import React, { useCallback, useEffect, useState } from "react";
-import { isUserLoggedIn } from "../../core/isUserLoggedIn";
+import { useSession } from "../../core/useSession";
 import { getAnalyticsProfile, getCoaching } from "../../state/scoreServices";
 import type { AnalyticsProfile, CoachingResponse, RollingBackspaceStats } from "../../types/analytics";
 import KeyboardHeatmap from "./KeyboardHeatmap";
@@ -221,16 +221,20 @@ const CoachingCard: React.FC<{ totalTests: number }> = ({ totalTests }) => {
 const Analytics: React.FC = () => {
   const [profile, setProfile] = useState<AnalyticsProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const loggedIn = isUserLoggedIn();
+  const [loadFailed, setLoadFailed] = useState(false);
+  const loggedIn = useSession() !== null;
 
   useEffect(() => {
     if (!loggedIn) {
       setLoading(false);
       return;
     }
+    setLoadFailed(false);
     getAnalyticsProfile()
       .then((data) => setProfile(data))
-      .catch(console.error)
+      // Without this the failure reads as "you have no data yet", which is a
+      // different thing entirely.
+      .catch(() => setLoadFailed(true))
       .finally(() => setLoading(false));
   }, [loggedIn]);
 
@@ -251,6 +255,19 @@ const Analytics: React.FC = () => {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", mt: 8 }}>
         <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (loadFailed) {
+    return (
+      <Box sx={{ maxWidth: 600, mx: "auto", textAlign: "center", mt: 6 }}>
+        <Typography variant="h5" gutterBottom>
+          Analytics
+        </Typography>
+        <Typography color="text.secondary">
+          Could not load your analytics. Try again later.
+        </Typography>
       </Box>
     );
   }

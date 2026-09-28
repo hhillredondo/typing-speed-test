@@ -79,6 +79,8 @@ export class TypingSpeedStack extends Stack {
         userPassword: true,
       },
       preventUserExistenceErrors: true,
+      // Already the default for new clients; stated because logout depends on it.
+      enableTokenRevocation: true,
     });
 
     // --- API Lambda ---
@@ -122,6 +124,9 @@ export class TypingSpeedStack extends Stack {
           "cognito-idp:ConfirmSignUp",
           "cognito-idp:ResendConfirmationCode",
           "cognito-idp:InitiateAuth",
+          // Lets logout end the session server-side instead of leaving the
+          // refresh token usable for its full validity period.
+          "cognito-idp:RevokeToken",
           "cognito-idp:AdminGetUser",
           "cognito-idp:AdminDeleteUser",
         ],

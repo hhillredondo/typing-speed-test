@@ -1,5 +1,6 @@
 import { Box, createTheme, CssBaseline, Stack, ThemeProvider } from "@mui/material";
 import React, { useCallback, useState } from "react";
+import { Navigate } from "react-router-dom";
 import AppHeader from "../components/AppHeader";
 import Account from "../components/Account";
 import Analytics from "../components/Analytics/Analytics";
@@ -7,7 +8,7 @@ import DrillMode from "../components/DrillMode/DrillMode";
 import Profile from "../components/Profile";
 import Scores from "../components/Scores/Scores";
 import Test from "../components/Test/Test";
-import { isUserLoggedIn } from "../core/isUserLoggedIn";
+import { useSession } from "../core/useSession";
 
 const sharedTypography = {
   fontFamily: "'Inter', sans-serif",
@@ -108,6 +109,7 @@ const Main: React.FC<{ view: string }> = (props) => {
   const mode: number = localStorage.getItem("theme") === "dark" ? 1 : 0;
   const [theme, setTheme] = useState<number>(mode);
   const [testActive, setTestActive] = useState(false);
+  const session = useSession();
 
   const toggleTheme = () => {
     const next = theme === 0 ? 1 : 0;
@@ -161,17 +163,23 @@ const Main: React.FC<{ view: string }> = (props) => {
         </Stack>
       )}
 
-      {props.view === "profile" && isUserLoggedIn() && (
-        <Stack alignItems="center" sx={{ mt: 5 }}>
-          <Profile />
-        </Stack>
-      )}
+      {props.view === "profile" &&
+        (session ? (
+          <Stack alignItems="center" sx={{ mt: 5 }}>
+            <Profile />
+          </Stack>
+        ) : (
+          <Navigate to="/account" replace />
+        ))}
 
-      {props.view === "account" && !isUserLoggedIn() && (
-        <Stack alignItems="center" sx={{ mt: 10 }}>
-          <Account />
-        </Stack>
-      )}
+      {props.view === "account" &&
+        (session ? (
+          <Navigate to="/home" replace />
+        ) : (
+          <Stack alignItems="center" sx={{ mt: 10 }}>
+            <Account />
+          </Stack>
+        ))}
     </ThemeProvider>
   );
 };

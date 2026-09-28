@@ -12,6 +12,7 @@ import {
 } from "@mui/material";
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useSession } from "../core/useSession";
 import { deleteAccount, logout } from "../state/userServices";
 
 const Profile: React.FC = () => {
@@ -21,8 +22,7 @@ const Profile: React.FC = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const stored = localStorage.getItem("user");
-  const user = stored ? JSON.parse(stored) : null;
+  const user = useSession();
   if (!user) return null;
 
   const onLogout = () => {

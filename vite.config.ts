@@ -16,7 +16,8 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    environment: "node",
+    // The session layer is browser code: localStorage, window events, atob.
+    environment: "jsdom",
     include: ["src/**/*.test.{ts,tsx}"],
   },
 });

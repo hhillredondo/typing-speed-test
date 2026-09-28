@@ -9,6 +9,7 @@
 
 const mockDdbSend = jest.fn();
 const mockVerify = jest.fn();
+const mockCognitoSend = jest.fn();
 
 jest.mock("@aws-sdk/client-dynamodb", () => ({ DynamoDBClient: class {} }), { virtual: true });
 jest.mock(
@@ -26,9 +27,11 @@ jest.mock(
 jest.mock(
   "@aws-sdk/client-cognito-identity-provider",
   () => ({
-    CognitoIdentityProviderClient: class { send() { return Promise.resolve({}); } },
+    CognitoIdentityProviderClient: class { send(cmd) { return mockCognitoSend(cmd); } },
     SignUpCommand: class {}, ConfirmSignUpCommand: class {},
-    ResendConfirmationCodeCommand: class {}, InitiateAuthCommand: class {},
+    ResendConfirmationCodeCommand: class {},
+    InitiateAuthCommand: class { constructor(i) { this.input = i; } },
+    RevokeTokenCommand: class { constructor(i) { this.input = i; this.kind = "revoke"; } },
     AdminGetUserCommand: class {}, AdminDeleteUserCommand: class {},
   }),
   { virtual: true }
@@ -63,6 +66,7 @@ const req = (path, method, { token, body } = {}) => ({
 beforeEach(() => {
   mockDdbSend.mockReset();
   mockVerify.mockReset();
+  mockCognitoSend.mockReset().mockResolvedValue({});
 });
 
 describe("token verification", () => {
@@ -92,6 +96,115 @@ describe("token verification", () => {
     mockVerify.mockRejectedValue(new Error("Invalid signature"));
     const res = await handler(req("/api/analytics", "GET", { token: `h.${payload}.s` }));
     expect(res.statusCode).toBe(401);
+  });
+});
+
+/**
+ * The ID token lives an hour. Without a way to renew it the client could not tell
+ * an expired session from a signed-out one, and went on submitting dead tokens:
+ * scores landed as Anonymous and every protected route 401'd.
+ */
+describe("POST /api/users/refresh", () => {
+  test("login hands back the refresh token needed to renew", async () => {
+    mockCognitoSend.mockResolvedValue({
+      AuthenticationResult: { IdToken: "id-token", RefreshToken: "refresh-token" },
+    });
+    mockVerify.mockResolvedValue({ sub: "u1", name: "U", email: "u@x.com" });
+
+    const res = await handler(req("/api/users/login", "POST", {
+      body: { email: "u@x.com", password: "pw" },
+    }));
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toMatchObject({
+      token: "id-token",
+      refreshToken: "refresh-token",
+    });
+  });
+
+  test("exchanges a refresh token for a fresh id token", async () => {
+    mockCognitoSend.mockResolvedValue({ AuthenticationResult: { IdToken: "fresh-id-token" } });
+    mockVerify.mockResolvedValue({ sub: "u1", name: "U", email: "u@x.com" });
+
+    const res = await handler(req("/api/users/refresh", "POST", {
+      body: { refreshToken: "refresh-token" },
+    }));
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      _id: "u1", name: "U", email: "u@x.com", token: "fresh-id-token",
+    });
+    expect(mockCognitoSend.mock.calls[0][0].input).toMatchObject({
+      AuthFlow: "REFRESH_TOKEN_AUTH",
+      AuthParameters: { REFRESH_TOKEN: "refresh-token" },
+    });
+  });
+
+  test("the returned token is verified before its claims are used", async () => {
+    mockCognitoSend.mockResolvedValue({ AuthenticationResult: { IdToken: "id-token" } });
+    mockVerify.mockRejectedValue(new Error("Invalid signature"));
+
+    const res = await handler(req("/api/users/refresh", "POST", {
+      body: { refreshToken: "refresh-token" },
+    }));
+    expect(res.statusCode).toBe(401);
+  });
+
+  test("401s on a rejected refresh token", async () => {
+    mockCognitoSend.mockRejectedValue(
+      Object.assign(new Error("Refresh Token has expired"), { name: "NotAuthorizedException" })
+    );
+
+    const res = await handler(req("/api/users/refresh", "POST", {
+      body: { refreshToken: "stale" },
+    }));
+    expect(res.statusCode).toBe(401);
+  });
+
+  test("does not report a Cognito outage as a dead session", async () => {
+    // The client deletes the stored session on a 401, so a throttle answered with
+    // 401 would sign every user out over a transient AWS-side problem.
+    mockCognitoSend.mockRejectedValue(
+      Object.assign(new Error("Rate exceeded"), { name: "TooManyRequestsException" })
+    );
+
+    const res = await handler(req("/api/users/refresh", "POST", {
+      body: { refreshToken: "still-good" },
+    }));
+    expect(res.statusCode).toBe(503);
+  });
+
+  test("400s when no refresh token is supplied", async () => {
+    const res = await handler(req("/api/users/refresh", "POST", { body: {} }));
+    expect(res.statusCode).toBe(400);
+    expect(mockCognitoSend).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/users/logout", () => {
+  test("revokes the refresh token so the session ends server-side", async () => {
+    const res = await handler(req("/api/users/logout", "POST", {
+      body: { refreshToken: "refresh-token" },
+    }));
+
+    expect(res.statusCode).toBe(200);
+    const revoke = mockCognitoSend.mock.calls[0][0];
+    expect(revoke.kind).toBe("revoke");
+    expect(revoke.input).toMatchObject({ Token: "refresh-token" });
+  });
+
+  test("still reports success when the revoke fails, having nothing actionable to add", async () => {
+    mockCognitoSend.mockRejectedValue(new Error("Cognito down"));
+    const res = await handler(req("/api/users/logout", "POST", {
+      body: { refreshToken: "refresh-token" },
+    }));
+    expect(res.statusCode).toBe(200);
+  });
+
+  test("is a no-op without a refresh token", async () => {
+    const res = await handler(req("/api/users/logout", "POST", { body: {} }));
+    expect(res.statusCode).toBe(200);
+    expect(mockCognitoSend).not.toHaveBeenCalled();
   });
 });
 

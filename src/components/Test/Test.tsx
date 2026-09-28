@@ -10,6 +10,8 @@ import {
   Typography,
 } from "@mui/material";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useSession } from "../../core/useSession";
+import { isSessionExpired } from "../../state/apiClient";
 import { createScore } from "../../state/scoreServices";
 import englishWords from "../../assets/words/en.json";
 import Timer from "./components/Timer";
@@ -28,8 +30,7 @@ const cursorKeyframes = `
 const Test: React.FC<{ onTestRunning?: (running: boolean) => void }> = ({
   onTestRunning,
 }) => {
-  const loggedUser = localStorage.getItem("user");
-  const user = loggedUser ? JSON.parse(loggedUser) : null;
+  const user = useSession();
   const userId = user?._id || "";
 
   const [words, setWords] = useState<string[]>(() =>
@@ -45,8 +46,11 @@ const Test: React.FC<{ onTestRunning?: (running: boolean) => void }> = ({
   const [testRunning, setTestRunning] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
+  const [saveError, setSaveError] = useState<"expired" | "failed" | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  /** Identifies the current run, so a late save failure cannot mark the next one. */
+  const runRef = useRef(0);
   const finalScoreRef = useRef(0);
   const finalMistakesRef = useRef(0);
   const finalAccuracyRef = useRef(100);
@@ -105,12 +109,23 @@ const Test: React.FC<{ onTestRunning?: (running: boolean) => void }> = ({
     );
 
     if (userId) {
+      const run = runRef.current;
       createScore({
         score: scoreRef.current,
         accuracy: finalAccuracyRef.current,
         mistakes: mistakesRef.current,
         analytics,
-      }).catch(console.error);
+      }).catch((err) => {
+        // A dead session would otherwise land the score on the leaderboard as
+        // Anonymous, or vanish, with nothing on screen to explain it.
+        if (runRef.current !== run) return; // a later test owns the screen now
+        if (isSessionExpired(err)) {
+          setSaveError("expired");
+          return;
+        }
+        setSaveError("failed");
+        console.error(err);
+      });
     }
 
     setShowModal(true);
@@ -136,6 +151,8 @@ const Test: React.FC<{ onTestRunning?: (running: boolean) => void }> = ({
     setTotalKeys(0);
     setTimer(TEST_DURATION);
     setTestRunning(false);
+    setSaveError(null);
+    runRef.current += 1;
     keystrokesRef.current = [];
     backspaceEventsRef.current = [];
     wordEventsRef.current = [];
@@ -455,7 +472,17 @@ const Test: React.FC<{ onTestRunning?: (running: boolean) => void }> = ({
                 </Typography>
               </Stack>
             </Stack>
-            {!userId && (
+            {/* An expired session signs the user out, so this has to win over
+                the generic prompt below - otherwise the lost score goes
+                unexplained. */}
+            {saveError && (
+              <Typography variant="body2" color="error" sx={{ mt: 2 }}>
+                {saveError === "expired"
+                  ? "Your session expired, so this score was not saved. Log in again."
+                  : "This score could not be saved. Please try again later."}
+              </Typography>
+            )}
+            {!userId && !saveError && (
               <Typography
                 variant="body2"
                 color="text.secondary"

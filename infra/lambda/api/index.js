@@ -13,6 +13,7 @@ const {
   ConfirmSignUpCommand,
   ResendConfirmationCodeCommand,
   InitiateAuthCommand,
+  RevokeTokenCommand,
   AdminGetUserCommand,
   AdminDeleteUserCommand,
 } = require("@aws-sdk/client-cognito-identity-provider");
@@ -103,6 +104,14 @@ async function authenticate(event) {
 
 const UNAUTHORIZED = response(401, { message: "Not authorized" });
 
+// Cognito errors that mean the refresh token itself is no good, as opposed to a
+// transient service problem.
+const REFRESH_REFUSED_ERRORS = new Set([
+  "NotAuthorizedException",
+  "UserNotFoundException",
+  "InvalidParameterException",
+]);
+
 const MAX_USERNAME_LENGTH = 64;
 const MAX_ANALYTICS_BYTES = 64 * 1024;
 
@@ -189,6 +198,7 @@ async function handleConfirmSignUp(event) {
       name: claims.name || "",
       email: claims.email,
       token: idToken,
+      refreshToken: authResult.AuthenticationResult.RefreshToken,
     });
   } catch (err) {
     if (err.name === "CodeMismatchException") {
@@ -243,6 +253,52 @@ async function handleLogin(event) {
     const idToken = authResult.AuthenticationResult.IdToken;
     const claims = await jwtVerifier.verify(idToken);
 
+    // The ID token expires in an hour; the refresh token lets the client renew it
+    // without a re-login, so a session does not silently go dead mid-use.
+    return response(200, {
+      _id: claims.sub,
+      name: claims.name || "",
+      email: claims.email,
+      token: idToken,
+      refreshToken: authResult.AuthenticationResult.RefreshToken,
+    });
+  } catch (err) {
+    const status = err.name === "NotAuthorizedException" ||
+                   err.name === "UserNotFoundException" ? 400 : 500;
+    return response(status, { message: "Invalid credentials" });
+  }
+}
+
+/**
+ * Exchange a refresh token for a fresh ID token. Returns 401 on any failure so the
+ * client can treat it uniformly as "this session is over, sign in again".
+ *
+ * REFRESH_TOKEN_AUTH does not return a new refresh token (rotation is off), so the
+ * client keeps the one it has until Cognito expires it (30 days by default).
+ */
+async function handleRefreshToken(event) {
+  const { refreshToken } = parseBody(event);
+  if (!refreshToken) return response(400, { message: "Please provide a refresh token" });
+
+  let authResult;
+  try {
+    authResult = await cognito.send(new InitiateAuthCommand({
+      ClientId: CLIENT_ID,
+      AuthFlow: "REFRESH_TOKEN_AUTH",
+      AuthParameters: { REFRESH_TOKEN: refreshToken },
+    }));
+  } catch (err) {
+    if (REFRESH_REFUSED_ERRORS.has(err.name)) return UNAUTHORIZED;
+    // Throttling or an outage. Answering 401 here would make the client discard a
+    // refresh token that is still good, and sign the user out over a hiccup.
+    console.error("Refresh unavailable:", err);
+    return response(503, { message: "Could not refresh the session, please retry" });
+  }
+
+  try {
+    const idToken = authResult.AuthenticationResult.IdToken;
+    const claims = await jwtVerifier.verify(idToken);
+
     return response(200, {
       _id: claims.sub,
       name: claims.name || "",
@@ -250,10 +306,33 @@ async function handleLogin(event) {
       token: idToken,
     });
   } catch (err) {
-    const status = err.name === "NotAuthorizedException" ||
-                   err.name === "UserNotFoundException" ? 400 : 500;
-    return response(status, { message: "Invalid credentials" });
+    // Cognito answered but the token is unusable: no session can be handed back.
+    console.error("Refreshed token failed verification:", err);
+    return UNAUTHORIZED;
   }
+}
+
+/**
+ * Revoke a refresh token so signing out actually ends the session server-side.
+ * Without this the token stays usable for its full 30 days, which on a shared
+ * machine outlives the user's sitting at it.
+ *
+ * Always answers 200: the client has already discarded the session locally, and
+ * a revoke that could not be completed is not something the user can act on.
+ */
+async function handleLogout(event) {
+  const { refreshToken } = parseBody(event);
+  if (!refreshToken) return response(200, { message: "Logged out" });
+
+  try {
+    await cognito.send(new RevokeTokenCommand({
+      ClientId: CLIENT_ID,
+      Token: refreshToken,
+    }));
+  } catch (err) {
+    console.error("Revoke failed:", err);
+  }
+  return response(200, { message: "Logged out" });
 }
 
 async function handleGetMe(event) {
@@ -749,6 +828,8 @@ exports.handler = async (event) => {
     if (path === "/api/users/confirm" && method === "POST") return await handleConfirmSignUp(event);
     if (path === "/api/users/resend-code" && method === "POST") return await handleResendCode(event);
     if (path === "/api/users/login" && method === "POST") return await handleLogin(event);
+    if (path === "/api/users/refresh" && method === "POST") return await handleRefreshToken(event);
+    if (path === "/api/users/logout" && method === "POST") return await handleLogout(event);
     if (path === "/api/users/me" && method === "GET") return await handleGetMe(event);
     if (path === "/api/users/me" && method === "DELETE") return await handleDeleteAccount(event);
     if (path === "/api/scores" && method === "POST") return await handleCreateScore(event);

@@ -20,6 +20,7 @@
     "@playwright/test": "^1.48.0",
     "@types/node": "^22.20.2",
     "@vitejs/plugin-react": "^6.1.1",
+    "jsdom": "^29.1.1",
     "serve": "^14.2.4",
     "vite": "^8.2.2",
     "vitest": "^5.0.0"

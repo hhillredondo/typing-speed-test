@@ -14,13 +14,14 @@ import FitnessCenterIcon from "@mui/icons-material/FitnessCenter";
 import HomeIcon from "@mui/icons-material/Home";
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { isUserLoggedIn } from "../core/isUserLoggedIn";
+import { useSession } from "../core/useSession";
 
 const AppHeader: React.FC<{
   theme: number;
   onToggleTheme: () => void;
 }> = ({ theme, onToggleTheme }) => {
   const navigate = useNavigate();
+  const session = useSession();
 
   return (
     <AppBar
@@ -83,11 +84,11 @@ const AppHeader: React.FC<{
           </IconButton>
         </Tooltip>
 
-        <Tooltip title={isUserLoggedIn() ? "Profile" : "Login / Register"}>
+        <Tooltip title={session ? "Profile" : "Login / Register"}>
           <IconButton
             sx={{ color: "text.primary" }}
             onClick={() =>
-              navigate(isUserLoggedIn() ? "/profile" : "/account")
+              navigate(session ? "/profile" : "/account")
             }
           >
             <AccountCircleIcon />

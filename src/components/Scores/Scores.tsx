@@ -14,7 +14,7 @@ import {
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import React, { useEffect, useState } from "react";
 import { getScores } from "../../state/scoreServices";
-import { isUserLoggedIn } from "../../core/isUserLoggedIn";
+import { useSession } from "../../core/useSession";
 
 interface Score {
   _id: string;
@@ -36,13 +36,13 @@ const Scores: React.FC = () => {
   const [allScores, setAllScores] = useState<Score[]>([]);
   const [tab, setTab] = useState(0);
 
-  const loggedIn = isUserLoggedIn();
+  const loggedIn = useSession() !== null;
 
   useEffect(() => {
     getScores()
       .then((data: Score[]) => setAllScores(data))
       .catch(console.error);
-  }, []);
+  }, [loggedIn]);
 
   const globalSorted = [...allScores].sort((a, b) => b.score - a.score);
   const personalSorted = loggedIn

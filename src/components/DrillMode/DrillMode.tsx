@@ -17,7 +17,7 @@ import {
 } from "@mui/material";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { isUserLoggedIn } from "../../core/isUserLoggedIn";
+import { useSession } from "../../core/useSession";
 import { generateDrillPassage, getAnalyticsProfile } from "../../state/scoreServices";
 import type { AnalyticsProfile } from "../../types/analytics";
 import Timer from "../Test/components/Timer";
@@ -38,7 +38,8 @@ const DrillMode: React.FC = () => {
   const [passageText, setPassageText] = useState<string | null>(null);
   const [passageLoading, setPassageLoading] = useState(false);
   const [passageError, setPassageError] = useState<string | null>(null);
-  const loggedIn = isUserLoggedIn();
+  const [loadFailed, setLoadFailed] = useState(false);
+  const loggedIn = useSession() !== null;
 
   const [words, setWords] = useState<string[]>([]);
   const [wordIndex, setWordIndex] = useState(0);
@@ -98,6 +99,7 @@ const DrillMode: React.FC = () => {
       setLoading(false);
       return;
     }
+    setLoadFailed(false);
     getAnalyticsProfile()
       .then((data) => {
         setProfile(data);
@@ -105,7 +107,8 @@ const DrillMode: React.FC = () => {
           setWords(generateDrillWords(data));
         }
       })
-      .catch(console.error)
+      // Distinguished from an empty profile: the two need different messages.
+      .catch(() => setLoadFailed(true))
       .finally(() => setLoading(false));
   }, [loggedIn]);
 
@@ -230,6 +233,19 @@ const DrillMode: React.FC = () => {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", mt: 8 }}>
         <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (loadFailed) {
+    return (
+      <Box sx={{ maxWidth: 600, mx: "auto", textAlign: "center", mt: 6 }}>
+        <Typography variant="h5" gutterBottom>
+          Weakness Drill
+        </Typography>
+        <Typography color="text.secondary">
+          Could not load your drill profile. Try again later.
+        </Typography>
       </Box>
     );
   }
