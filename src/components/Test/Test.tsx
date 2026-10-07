@@ -16,7 +16,7 @@ import { createScore } from "../../state/scoreServices";
 import englishWords from "../../assets/words/en.json";
 import Timer from "./components/Timer";
 import { shuffleArray } from "./utils";
-import { computeTestAnalytics } from "./utils/computeAnalytics";
+import { computeTestAnalytics, isUnnecessaryBackspace } from "./utils/computeAnalytics";
 import type { BackspaceEvent, KeystrokeEvent, WordEvent } from "../../types/analytics";
 
 const TEST_DURATION = 60;
@@ -250,6 +250,7 @@ const Test: React.FC<{ onTestRunning?: (running: boolean) => void }> = ({
       backspaceEventsRef.current.push({
         ts: performance.now() - testStartTimeRef.current,
         wordIdx: wordIndex,
+        unnecessary: isUnnecessaryBackspace(typed, currentWord),
       });
       setTyped((t) => t.slice(0, -1));
     } else if (key.length === 1) {

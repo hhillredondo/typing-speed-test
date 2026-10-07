@@ -6,6 +6,7 @@ export interface BackspaceStats {
   consecutiveRuns: number;
   totalConsecutiveLength: number;
   maxConsecutiveLength: number;
+  unnecessaryBackspaces: number;
 }
 
 export interface TestAnalytics {
@@ -30,6 +31,7 @@ export interface KeystrokeEvent {
 export interface BackspaceEvent {
   ts: number;
   wordIdx: number;
+  unnecessary: boolean;
 }
 
 export interface WordEvent {
@@ -47,6 +49,10 @@ export interface RollingBackspaceStats {
   wordsFailed: number;
   totalConsecutiveRuns: number;
   totalConsecutiveLength: number;
+  /** Absent on profiles whose tests all predate the metric. */
+  unnecessaryBackspaces?: number;
+  /** Tests that reported `unnecessaryBackspaces`; the denominator for its average. */
+  unnecessaryTrackedTests?: number;
 }
 
 export interface AnalyticsProfile {

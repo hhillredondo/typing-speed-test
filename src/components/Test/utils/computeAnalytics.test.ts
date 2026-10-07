@@ -1,4 +1,4 @@
-import { computeTestAnalytics } from "./computeAnalytics";
+import { computeTestAnalytics, isUnnecessaryBackspace } from "./computeAnalytics";
 import type {
   BackspaceEvent,
   KeystrokeEvent,
@@ -91,9 +91,9 @@ describe("computeTestAnalytics", () => {
 
   test("backspace stats split recovered vs failed words", () => {
     const backspaceEvents: BackspaceEvent[] = [
-      { ts: 100, wordIdx: 0 },
-      { ts: 200, wordIdx: 0 },
-      { ts: 300, wordIdx: 1 },
+      { ts: 100, wordIdx: 0, unnecessary: false },
+      { ts: 200, wordIdx: 0, unnecessary: true },
+      { ts: 300, wordIdx: 1, unnecessary: false },
     ];
     const wordEvents: WordEvent[] = [
       { word: "hi", typed: "hi", correct: true, ts: 500, wordIdx: 0 },
@@ -109,6 +109,7 @@ describe("computeTestAnalytics", () => {
     expect(out.backspaceStats.consecutiveRuns).toBe(2);
     expect(out.backspaceStats.totalConsecutiveLength).toBe(3);
     expect(out.backspaceStats.maxConsecutiveLength).toBe(2);
+    expect(out.backspaceStats.unnecessaryBackspaces).toBe(1);
   });
 
   test("returns counters consistent with input lengths", () => {
@@ -123,5 +124,20 @@ describe("computeTestAnalytics", () => {
     expect(out.totalKeystrokes).toBe(2);
     expect(out.wordsAttempted).toBe(1);
     expect(out.totalBackspaces).toBe(0);
+    expect(out.backspaceStats.unnecessaryBackspaces).toBe(0);
+  });
+});
+
+describe("isUnnecessaryBackspace", () => {
+  test.each([
+    ["hel", true], // nothing wrong yet
+    ["hello", true], // whole word correct
+    ["h", true], // overshoot past a fixed typo
+    ["", true], // empty input deletes nothing
+    ["hwll", false], // correct chars after a typo must go to reach it
+    ["hw", false], // deletes the typo itself
+    ["hellox", false], // overflow char
+  ])("typed %j against 'hello' -> %s", (typed, expected) => {
+    expect(isUnnecessaryBackspace(typed, "hello")).toBe(expected);
   });
 });

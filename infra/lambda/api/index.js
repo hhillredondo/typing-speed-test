@@ -31,6 +31,8 @@ const {
   classifyFatigueArchetype,
   computeWpmTrend,
   determineTrigger,
+  newBackspaceStats,
+  mergeBackspaceStats,
 } = require("./pure");
 
 const TABLE = process.env.TABLE_NAME;
@@ -502,14 +504,6 @@ async function handleGetScores(event) {
 
 const RECENT_HISTORY_SIZE = 50;
 
-function newBackspaceStats() {
-  return {
-    totalBackspaces: 0, wordsWithBackspace: 0,
-    wordsRecovered: 0, wordsFailed: 0,
-    totalConsecutiveRuns: 0, totalConsecutiveLength: 0,
-  };
-}
-
 function mergeKeyStats(rolling, keyStats) {
   for (const [key, stats] of Object.entries(keyStats)) {
     if (!rolling[key]) {
@@ -532,15 +526,6 @@ function mergeBigramStats(rolling, bigramStats) {
     r.totalLatencyMs += bg.avgLatencyMs * bg.count;
     r.count += bg.count;
   }
-}
-
-function mergeBackspaceStats(rolling, bs) {
-  rolling.totalBackspaces += bs.totalBackspaces;
-  rolling.wordsWithBackspace += bs.wordsWithBackspace;
-  rolling.wordsRecovered += bs.wordsRecovered;
-  rolling.wordsFailed += bs.wordsFailed;
-  rolling.totalConsecutiveRuns += bs.consecutiveRuns;
-  rolling.totalConsecutiveLength += bs.totalConsecutiveLength;
 }
 
 function mergeWindows(profile, windows) {
@@ -586,7 +571,9 @@ async function updateAnalyticsProfile(userId, score, accuracy, mistakes, analyti
 
   if (analytics.keyStats) mergeKeyStats(profile.rollingKeyStats, analytics.keyStats);
   if (analytics.bigramStats) mergeBigramStats(profile.rollingBigramStats, analytics.bigramStats);
-  if (analytics.backspaceStats) mergeBackspaceStats(profile.rollingBackspaceStats, analytics.backspaceStats);
+  if (analytics.backspaceStats) {
+    profile.rollingBackspaceStats = mergeBackspaceStats(profile.rollingBackspaceStats, analytics.backspaceStats);
+  }
   if (analytics.windows?.length > 0) mergeWindows(profile, analytics.windows);
 
   profile.recentWpm = [...profile.recentWpm, score].slice(-RECENT_HISTORY_SIZE);

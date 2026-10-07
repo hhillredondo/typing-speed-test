@@ -89,6 +89,10 @@ const BackspaceSection: React.FC<{
   totalTests: number;
 }> = ({ stats, totalTests }) => {
   const avgPerTest = totalTests > 0 ? (stats.totalBackspaces / totalTests).toFixed(1) : "0";
+  // Divided by tracked tests, not totalTests: tests before this metric existed have no count.
+  const avgUnnecessary = stats.unnecessaryTrackedTests
+    ? ((stats.unnecessaryBackspaces ?? 0) / stats.unnecessaryTrackedTests).toFixed(1)
+    : "—";
   const avgConsecutive =
     stats.totalConsecutiveRuns > 0
       ? (stats.totalConsecutiveLength / stats.totalConsecutiveRuns).toFixed(1)
@@ -104,6 +108,7 @@ const BackspaceSection: React.FC<{
 
   const items = [
     { label: "Avg backspaces / test", value: avgPerTest },
+    { label: "Unnecessary backspaces / test", value: avgUnnecessary },
     { label: "Words recovered with backspace", value: String(stats.wordsRecovered) },
     { label: "Words still wrong despite backspace", value: String(stats.wordsFailed) },
     {
@@ -116,7 +121,7 @@ const BackspaceSection: React.FC<{
   ];
 
   return (
-    <Grid container spacing={1}>
+    <Grid container spacing={1} justifyContent="center">
       {items.map((item) => (
         <Grid size={{ xs: 6, sm: 4 }} key={item.label}>
           <Box sx={{ textAlign: "center", py: 0.5 }}>

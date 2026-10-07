@@ -115,6 +115,11 @@ function computeWindows(
   return windows;
 }
 
+// Deleting correct chars to reach an earlier typo is necessary: there is no cursor movement.
+export function isUnnecessaryBackspace(typed: string, target: string): boolean {
+  return target.startsWith(typed);
+}
+
 function computeBackspaceStats(
   backspaceEvents: BackspaceEvent[],
   wordEvents: WordEvent[],
@@ -141,6 +146,7 @@ function computeBackspaceStats(
     consecutiveRuns: consecutiveRuns.length,
     totalConsecutiveLength,
     maxConsecutiveLength,
+    unnecessaryBackspaces: backspaceEvents.filter((e) => e.unnecessary).length,
   };
 }
 

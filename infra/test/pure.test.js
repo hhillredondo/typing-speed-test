@@ -6,6 +6,8 @@ const {
   classifyFatigueArchetype,
   computeWpmTrend,
   determineTrigger,
+  newBackspaceStats,
+  mergeBackspaceStats,
 } = require("../lambda/api/pure");
 
 describe("resolveBedrockModelId", () => {
@@ -196,5 +198,55 @@ describe("determineTrigger", () => {
 
   test("periodic otherwise", () => {
     expect(determineTrigger({ totalTests: 3, recentWpm: [60, 60, 50] })).toBe("periodic");
+  });
+});
+
+describe("mergeBackspaceStats", () => {
+  const testStats = (extra = {}) => ({
+    totalBackspaces: 5, wordsWithBackspace: 2, wordsRecovered: 1, wordsFailed: 1,
+    consecutiveRuns: 2, totalConsecutiveLength: 5, maxConsecutiveLength: 3,
+    ...extra,
+  });
+  const legacyRolling = () => {
+    const { unnecessaryBackspaces, unnecessaryTrackedTests, ...rest } = newBackspaceStats();
+    return rest;
+  };
+
+  test("sums every field and counts the test toward the unnecessary average", () => {
+    const once = mergeBackspaceStats(newBackspaceStats(), testStats({ unnecessaryBackspaces: 3 }));
+    const twice = mergeBackspaceStats(once, testStats({ unnecessaryBackspaces: 1 }));
+    expect(twice).toEqual({
+      totalBackspaces: 10, wordsWithBackspace: 4, wordsRecovered: 2, wordsFailed: 2,
+      totalConsecutiveRuns: 4, totalConsecutiveLength: 10,
+      unnecessaryBackspaces: 4, unnecessaryTrackedTests: 2,
+    });
+  });
+
+  test("starts the unnecessary fields on a profile that predates them", () => {
+    const merged = mergeBackspaceStats(legacyRolling(), testStats({ unnecessaryBackspaces: 3 }));
+    expect(merged.unnecessaryBackspaces).toBe(3);
+    expect(merged.unnecessaryTrackedTests).toBe(1);
+  });
+
+  test("leaves the unnecessary fields alone when an old client omits them", () => {
+    const rolling = { ...newBackspaceStats(), unnecessaryBackspaces: 7, unnecessaryTrackedTests: 2 };
+    const merged = mergeBackspaceStats(rolling, testStats());
+    expect(merged.unnecessaryBackspaces).toBe(7);
+    expect(merged.unnecessaryTrackedTests).toBe(2);
+    expect(merged.totalBackspaces).toBe(5);
+  });
+
+  test("never produces NaN for an old profile and an old client", () => {
+    const merged = mergeBackspaceStats(legacyRolling(), testStats());
+    expect(Object.values(merged).some(Number.isNaN)).toBe(false);
+    expect(merged).not.toHaveProperty("unnecessaryBackspaces");
+  });
+
+  test("does not mutate its inputs", () => {
+    const rolling = newBackspaceStats();
+    const bs = testStats({ unnecessaryBackspaces: 3 });
+    mergeBackspaceStats(rolling, bs);
+    expect(rolling).toEqual(newBackspaceStats());
+    expect(bs).toEqual(testStats({ unnecessaryBackspaces: 3 }));
   });
 });

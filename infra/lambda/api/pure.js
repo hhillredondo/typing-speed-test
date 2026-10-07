@@ -75,6 +75,34 @@ function computeWpmTrend(recentWpm) {
   return Math.round(slope * 100) / 100;
 }
 
+function newBackspaceStats() {
+  return {
+    totalBackspaces: 0, wordsWithBackspace: 0,
+    wordsRecovered: 0, wordsFailed: 0,
+    totalConsecutiveRuns: 0, totalConsecutiveLength: 0,
+    unnecessaryBackspaces: 0, unnecessaryTrackedTests: 0,
+  };
+}
+
+function mergeBackspaceStats(rolling, bs) {
+  // Older profiles and older clients lack the unnecessary fields; adding undefined
+  // gives NaN, which DynamoDB refuses, losing the whole profile update.
+  const tracked = typeof bs.unnecessaryBackspaces === "number";
+  return {
+    ...rolling,
+    totalBackspaces: rolling.totalBackspaces + bs.totalBackspaces,
+    wordsWithBackspace: rolling.wordsWithBackspace + bs.wordsWithBackspace,
+    wordsRecovered: rolling.wordsRecovered + bs.wordsRecovered,
+    wordsFailed: rolling.wordsFailed + bs.wordsFailed,
+    totalConsecutiveRuns: rolling.totalConsecutiveRuns + bs.consecutiveRuns,
+    totalConsecutiveLength: rolling.totalConsecutiveLength + bs.totalConsecutiveLength,
+    ...(tracked && {
+      unnecessaryBackspaces: (rolling.unnecessaryBackspaces ?? 0) + bs.unnecessaryBackspaces,
+      unnecessaryTrackedTests: (rolling.unnecessaryTrackedTests ?? 0) + 1,
+    }),
+  };
+}
+
 function determineTrigger(profile) {
   const previous = profile.recentWpm.slice(0, -1);
   const latest = profile.recentWpm[profile.recentWpm.length - 1];
@@ -91,4 +119,6 @@ module.exports = {
   classifyFatigueArchetype,
   computeWpmTrend,
   determineTrigger,
+  newBackspaceStats,
+  mergeBackspaceStats,
 };

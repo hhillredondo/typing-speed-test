@@ -57,6 +57,17 @@ On each Backspace we append a **`BackspaceEvent`**:
 |----------|---------|
 | `ts`     | Milliseconds since test start. |
 | `wordIdx`| Index of the word the user was editing when they pressed Backspace. |
+| `unnecessary` | Whether this backspace was avoidable (see below). |
+
+A backspace is **unnecessary** when the text typed for the current word, *before* the deletion, is still an error-free prefix of the target: `target.startsWith(typed)` (`isUnnecessaryBackspace` in `computeAnalytics.ts`). There is no cursor movement, so deleting correct characters to reach an earlier typo is **necessary**. Examples with target `hello`:
+
+| Typed, then Backspace | Classification |
+|---|---|
+| `hel` | unnecessary (nothing wrong yet) |
+| `hwll`, Backspace x3 | all 3 necessary (the two correct `l`s must go to reach `w`) |
+| `hwll`, Backspace x4 | 3 necessary, the 4th (deleting `h`) unnecessary |
+| `hellox` | necessary (overflow character) |
+| empty input (right after Space) | unnecessary (deletes nothing; `startsWith("")` is true) |
 
 We also track **consecutive backspace runs** in a separate array. A "run" starts when the user presses Backspace and ends when they press any other key (printable or Space). On each Backspace, a counter increments; when a non-Backspace key is pressed (or the test ends), the counter is flushed into the runs list. This gives us the length of every burst of consecutive backspaces.
 
@@ -125,6 +136,7 @@ Correlates backspace events with word outcomes to measure how effectively the us
 | **`consecutiveRuns`** | Number of backspace "bursts" (contiguous sequences of Backspace presses with no other keys between them). |
 | **`totalConsecutiveLength`** | Sum of all burst lengths (for computing average burst length). |
 | **`maxConsecutiveLength`** | Length of the longest single backspace burst. |
+| **`unnecessaryBackspaces`** | Backspace events flagged `unnecessary` (see 2.3). |
 
 **Example:** Typing `helol` → Backspace → Backspace → `lo` → Space (submitting `hello` correctly) produces one burst of length 2, and that word is counted as **recovered**.
 
@@ -181,6 +193,7 @@ Updated **after each scored test** when `analytics` is present (`infra/lambda/ap
   - `wordsFailed` (sum)
   - `totalConsecutiveRuns` (sum of burst counts across all tests)
   - `totalConsecutiveLength` (sum of all burst lengths across all tests; average burst = `totalConsecutiveLength / totalConsecutiveRuns`)
+  - `unnecessaryBackspaces` (sum) and `unnecessaryTrackedTests` (number of tests that reported `unnecessaryBackspaces`). The average is `unnecessaryBackspaces / unnecessaryTrackedTests`, not `/ totalTests`, because tests submitted before the metric existed have no count and would dilute it. Profiles created before the metric lack both fields until their next test, and payloads from older clients leave them untouched (`mergeBackspaceStats` in `infra/lambda/api/pure.js`); adding a missing field would produce NaN, which DynamoDB rejects.
 
 **History arrays (last 50 tests):**
 
@@ -241,7 +254,7 @@ The Analytics UI shows an up / flat / down icon using thresholds **±0.5** on th
 | Keyboard heatmap | `rollingKeyStats`: color by **error rate** per key; tooltip shows error %, total presses, rolling avg latency. |
 | Weakest keys table | `weakestKeys` from API. |
 | Slowest bigrams table | `slowestBigrams` from API. |
-| Backspace analysis | `rollingBackspaceStats` + `totalTests`: avg backspaces/test, words recovered, words failed, recovery rate, burst count, avg burst length. **Recovery rate** = `wordsRecovered / (wordsRecovered + wordsFailed)` when that sum &gt; 0 (share of *submitted* words that used backspace and were typed correctly). It is **not** `wordsRecovered / wordsWithBackspace`, because `wordsWithBackspace` includes words you were still fixing when the timer ended (no submission), which would otherwise depress the percentage even when every submitted word was recovered. |
+| Backspace analysis | `rollingBackspaceStats` + `totalTests`: avg backspaces/test, unnecessary backspaces/test (`unnecessaryBackspaces / unnecessaryTrackedTests`, or a placeholder when no test has tracked it yet), words recovered, words failed, recovery rate, burst count, avg burst length. **Recovery rate** = `wordsRecovered / (wordsRecovered + wordsFailed)` when that sum &gt; 0 (share of *submitted* words that used backspace and were typed correctly). It is **not** `wordsRecovered / wordsWithBackspace`, because `wordsWithBackspace` includes words you were still fixing when the timer ended (no submission), which would otherwise depress the percentage even when every submitted word was recovered. |
 | Average pacing chart | `avgWindows` (derived from `rollingWindows`). |
 | WPM progress chart | `recentWpm` (line vs. test index). |
 
