@@ -15,9 +15,9 @@
   "devDependencies": {
     "@types/node": "^20.11.0",
     "aws-cdk": "^2.1141.0",
-    "jest": "^29.7.0",
+    "jest": "^30.5.2",
     "ts-node": "^10.9.2",
-    "typescript": "~5.3.3"
+    "typescript": "~5.9.3"
   },
   "jest": {
     "testEnvironment": "node",
