@@ -15,6 +15,11 @@ export const getScores = async () => {
   return response.data;
 };
 
+export const getMyScores = async () => {
+  const response = await api.get("/api/scores/me");
+  return response.data;
+};
+
 export const getAnalyticsProfile = async () => {
   const response = await api.get("/api/analytics");
   return response.data;

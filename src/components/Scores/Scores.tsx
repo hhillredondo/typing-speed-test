@@ -13,7 +13,7 @@ import {
 } from "@mui/material";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import React, { useEffect, useState } from "react";
-import { getScores } from "../../state/scoreServices";
+import { getMyScores, getScores } from "../../state/scoreServices";
 import { useSession } from "../../core/useSession";
 
 interface Score {
@@ -25,7 +25,7 @@ interface Score {
   createdAt: string;
 }
 
-const medalColor = (idx: number) => {
+const medalColor =(idx: number) => {
   if (idx === 0) return "#FFD700";
   if (idx === 1) return "#C0C0C0";
   if (idx === 2) return "#CD7F32";
@@ -33,21 +33,17 @@ const medalColor = (idx: number) => {
 };
 
 const Scores: React.FC = () => {
-  const [allScores, setAllScores] = useState<Score[]>([]);
+  const [leaderboard, setLeaderboard] = useState<Score[]>([]);
+  const [myScores, setMyScores] = useState<Score[]>([]);
   const [tab, setTab] = useState(0);
 
   const loggedIn = useSession() !== null;
 
   useEffect(() => {
-    getScores()
-      .then((data: Score[]) => setAllScores(data))
-      .catch(console.error);
+    getScores().then(setLeaderboard).catch(console.error);
+    if (loggedIn) getMyScores().then(setMyScores).catch(console.error);
+    else setMyScores([]);
   }, [loggedIn]);
-
-  const globalSorted = [...allScores].sort((a, b) => b.score - a.score);
-  const personalSorted = loggedIn
-    ? globalSorted.filter((s) => s.isMine)
-    : [];
 
   const renderTable = (scores: Score[], showUser: boolean) => {
     if (scores.length === 0) {
@@ -115,8 +111,8 @@ const Scores: React.FC = () => {
         <Tab label="My Scores" disabled={!loggedIn} />
       </Tabs>
 
-      {tab === 0 && renderTable(globalSorted, true)}
-      {tab === 1 && renderTable(personalSorted, false)}
+      {tab === 0 && renderTable(leaderboard, true)}
+      {tab === 1 && renderTable(myScores, false)}
 
       {tab === 1 && !loggedIn && (
         <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ mt: 2 }}>

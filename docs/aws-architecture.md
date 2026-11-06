@@ -99,12 +99,12 @@ Single table; partition key **`pk`**, sort key **`sk`**.
 | Pattern | `pk` | `sk` | Notes |
 |---------|------|------|--------|
 | User profile | `USER#<cognito-sub>` | `PROFILE` | Created on email confirmation |
-| Score | `USER#<sub>` | `SCORE#<ISO>#<uuid>` | GSI1: leaderboard |
+| Score | `USER#<sub>` | `SCORE#<ISO>#<uuid>` | `gsi1pk = SCORE`; in the `leaderboard` GSI |
 | Analytics aggregate | `USER#<sub>` | `ANALYTICS` | Rolling stats, derived fields |
 | AI coaching cache | `USER#<sub>` | `COACH` | Optional `ttl` |
 | AI passage cache | `USER#<sub>` | `PASSAGE#…` | Optional `ttl` |
 
-Global secondary index **`gsi1`**: items with `gsi1pk = SCORE` and `gsi1sk` = timestamp support querying recent global scores for the leaderboard.
+Global secondary index **`leaderboard`**: partition key `gsi1pk` (`SCORE` on every score item), sort key `score` (number). Queried descending with `Limit: 10` for the global leaderboard. A user's own scores come from querying their partition (`pk = USER#<sub>`, `sk` begins with `SCORE#`).
 
 ---
 

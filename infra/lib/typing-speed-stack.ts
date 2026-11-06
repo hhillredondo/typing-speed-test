@@ -47,11 +47,13 @@ export class TypingSpeedStack extends Stack {
       timeToLiveAttribute: "ttl",
     });
 
+    // gsi1pk is a legacy attribute name, kept so existing score items need no migration.
     this.table.addGlobalSecondaryIndex({
-      indexName: "gsi1",
+      indexName: "leaderboard",
       partitionKey: { name: "gsi1pk", type: dynamodb.AttributeType.STRING },
-      sortKey: { name: "gsi1sk", type: dynamodb.AttributeType.STRING },
-      projectionType: dynamodb.ProjectionType.ALL,
+      sortKey: { name: "score", type: dynamodb.AttributeType.NUMBER },
+      projectionType: dynamodb.ProjectionType.INCLUDE,
+      nonKeyAttributes: ["scoreId", "userId", "userName", "accuracy", "createdAt"],
     });
 
     // --- Cognito (SPA: no client secret) ---
@@ -215,7 +217,7 @@ export class TypingSpeedStack extends Stack {
 
     // --- GitHub Actions deploy role (OIDC) ---
     new GitHubActionsRole(this, "GitHubActionsDeployRole", {
-      repo: "AlphaAnimal/typing-speed-test",
+      repo: "hhillredondo/typing-speed-test",
       siteBucket: this.siteBucket,
       distribution: this.distribution,
     });

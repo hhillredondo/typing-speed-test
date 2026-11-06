@@ -442,7 +442,6 @@ async function handleCreateScore(event) {
     pk: userId !== "anonymous" ? `USER#${userId}` : "USER#anonymous",
     sk: `SCORE#${now}#${id}`,
     gsi1pk: "SCORE",
-    gsi1sk: now,
     scoreId: id,
     userId,
     userName,
@@ -472,31 +471,66 @@ async function handleCreateScore(event) {
   });
 }
 
+const LEADERBOARD_SIZE = 10;
+
+// No user identifier is returned: the leaderboard is public, and echoing
+// item.userId here enumerated every user's Cognito sub. The caller only needs
+// to know which rows are theirs.
+const toScoreRow = (item, callerId) => ({
+  _id: item.scoreId,
+  isMine: callerId !== null && item.userId === callerId,
+  userName: item.userName || "Anonymous",
+  score: item.score,
+  accuracy: item.accuracy ?? null,
+  createdAt: item.createdAt,
+});
+
 async function handleGetScores(event) {
   const claims = await authenticate(event);
   const callerId = claims ? claims.sub : null;
 
   const result = await ddb.send(new QueryCommand({
     TableName: TABLE,
-    IndexName: "gsi1",
+    IndexName: "leaderboard",
     KeyConditionExpression: "gsi1pk = :pk",
     ExpressionAttributeValues: { ":pk": "SCORE" },
     ScanIndexForward: false,
-    Limit: 500,
+    Limit: LEADERBOARD_SIZE,
   }));
 
-  // No user identifier is returned: the leaderboard is public, and echoing
-  // item.userId here enumerated every user's Cognito sub. The caller only needs
-  // to know which rows are theirs.
-  const scores = (result.Items || []).map((item) => ({
-    _id: item.scoreId,
-    isMine: callerId !== null && item.userId === callerId,
-    userName: item.userName || "Anonymous",
-    score: item.score,
-    accuracy: item.accuracy ?? null,
-    createdAt: item.createdAt,
-  }));
+  return response(200, (result.Items || []).map((item) => toScoreRow(item, callerId)));
+}
 
+async function handleGetMyScores(event) {
+  const claims = await authenticate(event);
+  if (!claims) return UNAUTHORIZED;
+
+  const items = [];
+  let lastKey;
+  do {
+    // Projected because score items can carry up to 64 KB of analytics each.
+    const result = await ddb.send(new QueryCommand({
+      TableName: TABLE,
+      KeyConditionExpression: "pk = :pk AND begins_with(sk, :prefix)",
+      ExpressionAttributeValues: { ":pk": `USER#${claims.sub}`, ":prefix": "SCORE#" },
+      ProjectionExpression: "#scoreId, #userId, #userName, #score, #accuracy, #createdAt",
+      ExpressionAttributeNames: {
+        "#scoreId": "scoreId",
+        "#userId": "userId",
+        "#userName": "userName",
+        "#score": "score",
+        "#accuracy": "accuracy",
+        "#createdAt": "createdAt",
+      },
+      ExclusiveStartKey: lastKey,
+    }));
+    items.push(...(result.Items || []));
+    lastKey = result.LastEvaluatedKey;
+  } while (lastKey);
+
+  const scores = items
+    .map((item) => toScoreRow(item, claims.sub))
+    .sort((a, b) => b.score - a.score);
   return response(200, scores);
 }
 
@@ -821,6 +855,7 @@ exports.handler = async (event) => {
     if (path === "/api/users/me" && method === "DELETE") return await handleDeleteAccount(event);
     if (path === "/api/scores" && method === "POST") return await handleCreateScore(event);
     if (path === "/api/scores" && method === "GET") return await handleGetScores(event);
+    if (path === "/api/scores/me" && method === "GET") return await handleGetMyScores(event);
     if (path === "/api/analytics" && method === "GET") return await handleGetAnalytics(event);
     if (path === "/api/coaching" && method === "GET") return await handleGetCoaching(event);
     if (path === "/api/drill/passage" && method === "POST") return await handleGeneratePassage(event);

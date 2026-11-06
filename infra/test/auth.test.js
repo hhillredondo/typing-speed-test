@@ -275,4 +275,45 @@ describe("GET /api/scores", () => {
     const body = JSON.parse((await handler(req("/api/scores", "GET"))).body);
     expect(body.every((r) => r.isMine === false)).toBe(true);
   });
+
+  test("reads the top 10 from the score-sorted index", async () => {
+    mockDdbSend.mockResolvedValue({ Items: rows });
+    await handler(req("/api/scores", "GET"));
+
+    const query = mockDdbSend.mock.calls[0][0].input;
+    expect(query.IndexName).toBe("leaderboard");
+    expect(query.ScanIndexForward).toBe(false);
+    expect(query.Limit).toBe(10);
+  });
+});
+
+describe("GET /api/scores/me", () => {
+  test("requires a valid token", async () => {
+    const res = await handler(req("/api/scores/me", "GET"));
+    expect(res.statusCode).toBe(401);
+    expect(mockDdbSend).not.toHaveBeenCalled();
+  });
+
+  test("returns only the caller's scores, every page, highest first", async () => {
+    mockVerify.mockResolvedValue({ sub: "user-b" });
+    mockDdbSend
+      .mockResolvedValueOnce({
+        Items: [{ scoreId: "s1", userId: "user-b", score: 30 }],
+        LastEvaluatedKey: { pk: "USER#user-b", sk: "SCORE#1" },
+      })
+      .mockResolvedValueOnce({ Items: [{ scoreId: "s2", userId: "user-b", score: 50 }] });
+
+    const res = await handler(req("/api/scores/me", "GET", { token: "good" }));
+    const body = JSON.parse(res.body);
+
+    const queries = mockDdbSend.mock.calls.map((c) => c[0].input);
+    expect(queries).toHaveLength(2);
+    expect(queries[1].ExclusiveStartKey).toEqual({ pk: "USER#user-b", sk: "SCORE#1" });
+    for (const q of queries) {
+      expect(q.ExpressionAttributeValues).toEqual({ ":pk": "USER#user-b", ":prefix": "SCORE#" });
+    }
+    expect(body.map((r) => r._id)).toEqual(["s2", "s1"]);
+    expect(body.every((r) => r.isMine)).toBe(true);
+    expect(res.body).not.toContain("user-b");
+  });
 });
