@@ -15,8 +15,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
-      - name: Hit deployed CloudFront URL
+      - name: Hit deployed API health route
         run: npm run health-check
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
 
   unit-tests:
     runs-on: ubuntu-latest

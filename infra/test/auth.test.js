@@ -317,3 +317,23 @@ describe("GET /api/scores/me", () => {
     expect(res.body).not.toContain("user-b");
   });
 });
+
+describe("health route", () => {
+  test("reads DynamoDB and reports ok", async () => {
+    mockDdbSend.mockResolvedValue({});
+    const res = await handler(req("/api/health", "GET"));
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).ok).toBe(true);
+    expect(mockDdbSend.mock.calls[0][0].input.TableName).toBe("test-table");
+  });
+
+  test("returns 503 when DynamoDB is unreachable", async () => {
+    mockDdbSend.mockRejectedValue(new Error("AccessDeniedException"));
+    jest.spyOn(console, "error").mockImplementation(() => {});
+    const res = await handler(req("/api/health", "GET"));
+
+    expect(res.statusCode).toBe(503);
+    expect(JSON.parse(res.body)).toEqual({ ok: false, env: "unknown" });
+  });
+});

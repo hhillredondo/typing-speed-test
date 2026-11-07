@@ -826,6 +826,19 @@ async function handleGeneratePassage(event) {
   }
 }
 
+// Reads a key that never exists: exercises the same table, IAM grant and
+// data-plane path as real requests without depending on any stored item.
+async function handleHealth() {
+  const env = process.env.ENV_NAME || "unknown";
+  try {
+    await ddb.send(new GetCommand({ TableName: TABLE, Key: { pk: "HEALTH", sk: "HEALTH" } }));
+    return response(200, { ok: true, env });
+  } catch (err) {
+    console.error("Health check DynamoDB read failed:", err);
+    return response(503, { ok: false, env });
+  }
+}
+
 // ── Router ──
 
 exports.handler = async (event) => {
@@ -859,9 +872,7 @@ exports.handler = async (event) => {
     if (path === "/api/analytics" && method === "GET") return await handleGetAnalytics(event);
     if (path === "/api/coaching" && method === "GET") return await handleGetCoaching(event);
     if (path === "/api/drill/passage" && method === "POST") return await handleGeneratePassage(event);
-    if (path === "/health" || path === "/api/health") {
-      return response(200, { ok: true, env: process.env.ENV_NAME || "unknown" });
-    }
+    if (path === "/health" || path === "/api/health") return await handleHealth();
 
     return response(404, { message: "Not found", path, method });
   } catch (err) {
