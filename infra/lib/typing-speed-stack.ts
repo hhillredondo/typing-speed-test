@@ -217,7 +217,9 @@ export class TypingSpeedStack extends Stack {
 
     // --- GitHub Actions deploy role (OIDC) ---
     new GitHubActionsRole(this, "GitHubActionsDeployRole", {
-      repo: "hhillredondo/typing-speed-test",
+      // Immutable subject (owner@ownerId/repo@repoId): the repo has GitHub's
+      // immutable OIDC subjects enabled, so the token carries the numeric IDs.
+      repo: "hhillredondo@57966292/typing-speed-test@413085647",
       siteBucket: this.siteBucket,
       distribution: this.distribution,
     });

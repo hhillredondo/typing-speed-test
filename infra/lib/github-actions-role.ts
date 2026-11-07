@@ -5,7 +5,7 @@ import * as s3 from "aws-cdk-lib/aws-s3";
 import { Construct } from "constructs";
 
 export interface GitHubActionsRoleProps {
-  /** GitHub repo slug, e.g. "hhillredondo/typing-speed-test". */
+  /** Repo as it appears in the OIDC `sub` claim, e.g. "owner@123/repo@456". */
   repo: string;
   /** Site bucket the deploy job needs to sync `build/` into. */
   siteBucket: s3.Bucket;
